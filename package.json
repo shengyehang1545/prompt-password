@@ -1,0 +1,23 @@
+{
+  "name": "prompt-password",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "preact": "^10.25.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.0",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/cli": "^2.5.0",
+    "@tauri-apps/plugin-global-shortcut": "^2.2.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
+  }
+}

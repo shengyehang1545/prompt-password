@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/file-json-schema/master/tauri-conf.schema.json",
+  "productName": "prompt-password",
+  "version": "0.1.0",
+  "identifier": "com.prompt-password.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Prompt Password",
+        "width": 480,
+        "height": 360,
+        "resizable": false,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
+    ]
+  }
+}
