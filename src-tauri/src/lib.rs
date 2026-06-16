@@ -1,10 +1,11 @@
 use std::sync::Mutex;
 use tauri::Manager;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 mod commands;
 mod core;
 mod db;
+mod platform;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,14 +14,7 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
-                        }
+                        platform::window::toggle_main_window(app);
                     }
                 })
                 .build(),
@@ -34,28 +28,16 @@ pub fn run() {
         ])
         .setup(|app| {
             let window = app
-                .get_webview_window("main")
+                .get_webview_window(platform::window::MAIN_WINDOW_LABEL)
                 .expect("main window must exist");
+            platform::window::configure_main_window(&window);
 
-            #[cfg(debug_assertions)]
-            {
-                window.open_devtools();
-            }
-
-            #[cfg(target_os = "macos")]
-            let hotkey = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyP);
-            #[cfg(not(target_os = "macos"))]
-            let hotkey = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP);
+            let hotkey = platform::hotkey::default_hotkey_spec();
             app.global_shortcut()
-                .register(hotkey)
-                .expect("failed to register global shortcut Cmd/Ctrl+Shift+P");
-
-            let w = window.clone();
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::Focused(false) = event {
-                    let _ = w.hide();
-                }
-            });
+                .register(hotkey.to_tauri_shortcut())
+                .unwrap_or_else(|e| {
+                    panic!("failed to register global shortcut {}: {}", hotkey.label(), e)
+                });
 
             let app_data_dir = app
                 .path()
