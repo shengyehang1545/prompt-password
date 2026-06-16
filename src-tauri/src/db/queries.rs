@@ -111,7 +111,7 @@ pub fn list_entries(conn: &Connection) -> Result<Vec<EntrySearchResult>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, url, description, alias, tags, password_enc
          FROM entries
-         ORDER BY updated_at DESC
+         ORDER BY updated_at DESC, rowid DESC
          LIMIT 20",
     )?;
 
@@ -144,4 +144,76 @@ fn build_fts_query(query: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_conn() -> Connection {
+        crate::db::init::initialize_connection(Connection::open_in_memory().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn insert_entry_persists_all_fields() {
+        let conn = test_conn();
+
+        let entry = insert_entry(
+            &conn,
+            "GitHub",
+            "https://github.com",
+            "Developer account",
+            "work login",
+            "secret-123",
+            "dev,code",
+        )
+        .unwrap();
+
+        assert_eq!(entry.name, "GitHub");
+        assert_eq!(entry.url, "https://github.com");
+        assert_eq!(entry.description, "Developer account");
+        assert_eq!(entry.alias, "work login");
+        assert_eq!(entry.password_enc, "secret-123");
+        assert_eq!(entry.password_nonce, "");
+        assert_eq!(entry.tags, "dev,code");
+        assert!(!entry.id.is_empty());
+        assert!(!entry.created_at.is_empty());
+        assert!(!entry.updated_at.is_empty());
+    }
+
+    #[test]
+    fn empty_search_lists_recent_entries() {
+        let conn = test_conn();
+        insert_entry(&conn, "First", "", "", "", "one", "").unwrap();
+        insert_entry(&conn, "Second", "", "", "", "two", "").unwrap();
+
+        let results = search_entries(&conn, "").unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].name, "Second");
+        assert_eq!(results[1].name, "First");
+    }
+
+    #[test]
+    fn search_entries_matches_metadata_fields() {
+        let conn = test_conn();
+        insert_entry(
+            &conn,
+            "GitHub",
+            "https://github.com",
+            "Developer account",
+            "work login",
+            "secret-123",
+            "dev,code",
+        )
+        .unwrap();
+
+        let alias_results = search_entries(&conn, "work").unwrap();
+        let tag_results = search_entries(&conn, "code").unwrap();
+
+        assert_eq!(alias_results.len(), 1);
+        assert_eq!(alias_results[0].name, "GitHub");
+        assert_eq!(tag_results.len(), 1);
+        assert_eq!(tag_results[0].name, "GitHub");
+    }
 }

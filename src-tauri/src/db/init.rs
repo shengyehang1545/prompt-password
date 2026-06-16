@@ -2,7 +2,10 @@ use rusqlite::{Connection, Result};
 
 pub fn initialize(db_path: &std::path::Path) -> Result<Connection> {
     let conn = Connection::open(db_path)?;
+    initialize_connection(conn)
+}
 
+pub fn initialize_connection(conn: Connection) -> Result<Connection> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
 
     conn.execute_batch(
@@ -44,4 +47,32 @@ pub fn initialize(db_path: &std::path::Path) -> Result<Connection> {
     )?;
 
     Ok(conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initialize_connection_creates_entries_schema() {
+        let conn = initialize_connection(Connection::open_in_memory().unwrap()).unwrap();
+
+        let table_count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('entries', 'entries_fts')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let trigger_count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND name IN ('entries_ai', 'entries_ad', 'entries_au')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(table_count, 2);
+        assert_eq!(trigger_count, 3);
+    }
 }
