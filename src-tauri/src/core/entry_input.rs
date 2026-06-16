@@ -78,7 +78,7 @@ mod tests {
             Some("  https://github.com  ".to_string()),
             Some("  Developer account  ".to_string()),
             Some("  work login  ".to_string()),
-            "secret".to_string(),
+            "  secret  ".to_string(),
             Some("  dev,code  ".to_string()),
         )
         .unwrap();
@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(input.url, "https://github.com");
         assert_eq!(input.description, "Developer account");
         assert_eq!(input.alias, "work login");
-        assert_eq!(input.password, "secret");
+        assert_eq!(input.password, "  secret  ");
         assert_eq!(input.tags, "dev,code");
     }
 }
