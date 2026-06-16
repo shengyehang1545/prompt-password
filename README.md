@@ -12,7 +12,7 @@ A lightweight local password quick-query tool for macOS and Windows. Instantly f
 |---------|-------------|------|------|
 | Hotkey Summon | Global hotkey to bring up the search panel | 快捷键唤起 | 全局热键调出搜索面板 |
 | Instant Search | Fuzzy search by site name / name / description / tags | 即时搜索 | 支持按网站名/名称/描述/标签进行模糊搜索 |
-| Secure Display | Password shows first 2 chars, rest masked (e.g. `Ab******`) | 安全展示 | 密码仅显示前两位，后续打码（如 `Ab******`） |
+| Masked Display | Password shows first 2 chars, rest masked (e.g. `Ab******`) | 打码展示 | 密码仅显示前两位，后续打码（如 `Ab******`） |
 | One-Click Copy | Auto-copy password to clipboard on selection | 一键复制 | 选中条目后自动复制密码到剪贴板 |
 
 ## Password Entry Data Model | 密码条目数据模型
@@ -42,8 +42,11 @@ Each password entry contains the following fields:
 - **Target behavior**: macOS-first, Windows-compatible
 
 Prompt Password uses one shared codebase. Rust owns storage, search, clipboard, hotkeys, and platform adapters. Preact owns the compact search panel and entry form.
+Phase 1 stores data locally in SQLite only; encryption at rest is planned for a later phase.
 
-## Project Structure | 项目结构
+## Project Structure (Selected) | 项目结构（节选）
+
+This block lists the main working areas, not every file.
 
 ```text
 prompt-password/
