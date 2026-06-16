@@ -1,0 +1,103 @@
+.entry-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  position: relative;
+  border-radius: var(--radius-sm);
+  margin-bottom: 2px;
+}
+
+.entry-item:hover { background: var(--bg-hover); }
+
+.entry-item--highlighted {
+  background: var(--bg-highlight);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.entry-item--copied { background: var(--bg-copied); }
+.entry-item--failed { background: var(--bg-failed); }
+
+.entry-item__icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.entry-item__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entry-item__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-item__url {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-item__password {
+  font-size: 13px;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", "Cascadia Code", monospace;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 12px;
+  user-select: none;
+  letter-spacing: 0.5px;
+}
+
+.entry-item__copied-badge,
+.entry-item__failed-badge {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  pointer-events: none;
+  animation: badge-pop 0.2s ease-out;
+}
+
+.entry-item__copied-badge {
+  color: var(--copied-text);
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.entry-item__failed-badge {
+  color: var(--failed-text);
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+@keyframes badge-pop {
+  from { opacity: 0; transform: translateY(-50%) scale(0.85); }
+  to { opacity: 1; transform: translateY(-50%) scale(1); }
+}

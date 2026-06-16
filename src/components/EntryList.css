@@ -1,0 +1,23 @@
+.entry-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px;
+}
+
+.entry-list::-webkit-scrollbar { width: 6px; }
+.entry-list::-webkit-scrollbar-track { background: transparent; }
+.entry-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+.entry-list::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.entry-list__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 14px;
+  flex: 1;
+}
+
+.entry-list__empty-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
