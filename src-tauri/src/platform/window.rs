@@ -22,16 +22,6 @@ pub fn toggle_main_window(app: &tauri::AppHandle) {
     }
 }
 
-pub fn hide_main_window(app: &tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        window
-            .hide()
-            .map_err(|e| format!("Failed to hide main window: {}", e))?;
-    }
-
-    Ok(())
-}
-
 fn hide_on_blur(window: &WebviewWindow) {
     let w = window.clone();
     window.on_window_event(move |event| {
