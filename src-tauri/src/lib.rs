@@ -3,6 +3,7 @@ use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 mod commands;
+mod core;
 mod db;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
