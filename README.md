@@ -33,33 +33,40 @@ Each password entry contains the following fields:
 - **macOS** (primary)
 - **Windows**
 
-## Project Structure (Planned) | 项目结构规划
+## Technology Direction | 技术方向
 
-```
+- **Shell**: Tauri 2.x
+- **Core**: Rust
+- **UI**: Preact + TypeScript
+- **Storage**: SQLite through `rusqlite`
+- **Target behavior**: macOS-first, Windows-compatible
+
+Prompt Password uses one shared codebase. Rust owns storage, search, clipboard, hotkeys, and platform adapters. Preact owns the compact search panel and entry form.
+
+## Project Structure | 项目结构
+
+```text
 prompt-password/
-├── src/
-│   ├── main/                  # Main process (Electron)
-│   │   ├── index.ts           # Entry point
-│   │   ├── hotkey.ts          # Global hotkey registration
-│   │   └── clipboard.ts       # Clipboard operations
-│   ├── renderer/              # UI layer
-│   │   ├── index.html         # Search panel
-│   │   ├── search.ts          # Search logic & fuzzy matching
-│   │   └── mask.ts            # Password masking display
-│   ├── store/                 # Data layer
-│   │   ├── entries.ts         # Password entry CRUD
-│   │   └── schema.ts          # Data model definition
-│   └── crypto/                # Security layer
-│       ├── encrypt.ts         # Encryption at rest
-│       └── decrypt.ts         # Decryption for display
+├── src/                         # Shared Preact UI
+│   ├── components/              # Search panel and entry form components
+│   ├── hooks/                   # UI data and clipboard hooks
+│   ├── lib/                     # Typed Tauri invoke wrappers
+│   ├── App.tsx
+│   └── main.tsx
+├── src-tauri/                   # Rust/Tauri application shell
+│   ├── src/
+│   │   ├── commands/            # Tauri commands exposed to the UI
+│   │   ├── core/                # Pure product logic
+│   │   ├── db/                  # SQLite initialization and queries
+│   │   ├── platform/            # OS-specific adapters
+│   │   ├── lib.rs
+│   │   └── main.rs
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+├── docs/superpowers/
 ├── package.json
-├── tsconfig.json
-└── README.md
+└── vite.config.ts
 ```
-
-> **Note**: The structure above is a planning reference. Technology choices (e.g. Electron vs Tauri, storage format, encryption scheme) will be decided during Phase 1 implementation.
-
-> **注**：以上结构为规划参考。技术选型（如 Electron vs Tauri、存储格式、加密方案）将在第一阶段实现时确定。
 
 ## Development Phases | 开发阶段
 
