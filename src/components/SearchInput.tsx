@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { inputGuards } from "../lib/inputGuards";
 
 interface SearchInputProps {
   value: string;
@@ -45,6 +46,7 @@ export function SearchInput({ value, onInput, onKeyDown, loading, children }: Se
         onInput={(e) => onInput((e.target as HTMLInputElement).value)}
         onKeyDown={onKeyDown}
         autofocus
+        {...inputGuards}
       />
       {loading && <span class="search-spinner" />}
       {children}

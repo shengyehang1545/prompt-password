@@ -48,21 +48,7 @@ pub fn unlock_or_initialize(
     let key = match queries::get_vault_meta(conn)
         .map_err(|e| format!("Failed to read vault metadata: {}", e))?
     {
-        Some(meta) => {
-            let salt = crypto::decode_base64(&meta.salt_b64)?;
-            let key = crypto::derive_key(master_password, &salt)?;
-            let verifier = crypto::decrypt_secret(
-                &key[..],
-                VERIFIER_AAD,
-                &meta.verifier_enc,
-                &meta.verifier_nonce,
-            )
-            .map_err(|_| "Master password is incorrect".to_string())?;
-            if verifier != VERIFIER_PLAINTEXT {
-                return Err("Master password is incorrect".to_string());
-            }
-            key
-        }
+        Some(_) => verify_master_password(conn, master_password)?,
         None => {
             let salt = crypto::random_salt();
             let key = crypto::derive_key(master_password, &salt)?;
@@ -81,6 +67,30 @@ pub fn unlock_or_initialize(
     migrate_legacy_plaintext_entries(conn, &key[..])?;
     session.unlock_with_key(key);
     Ok(())
+}
+
+pub fn verify_master_password(conn: &Connection, master_password: &str) -> Result<VaultKey, String> {
+    if master_password.is_empty() {
+        return Err("Master password is required".to_string());
+    }
+
+    let meta = queries::get_vault_meta(conn)
+        .map_err(|e| format!("Failed to read vault metadata: {}", e))?
+        .ok_or_else(|| "Vault is not initialized".to_string())?;
+    let salt = crypto::decode_base64(&meta.salt_b64)?;
+    let key = crypto::derive_key(master_password, &salt)?;
+    let verifier = crypto::decrypt_secret(
+        &key[..],
+        VERIFIER_AAD,
+        &meta.verifier_enc,
+        &meta.verifier_nonce,
+    )
+    .map_err(|_| "Master password is incorrect".to_string())?;
+    if verifier != VERIFIER_PLAINTEXT {
+        return Err("Master password is incorrect".to_string());
+    }
+
+    Ok(key)
 }
 
 fn migrate_legacy_plaintext_entries(conn: &Connection, key: &[u8]) -> Result<(), String> {

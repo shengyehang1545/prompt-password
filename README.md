@@ -1,85 +1,180 @@
-# Prompt Password | 快捷密码
+# Prompt Password（快捷密码）
 
-A lightweight local password quick-query tool for macOS and Windows. Instantly find and copy passwords via a global hotkey — fast, minimal, and distraction-free, just like an input method.
+[English README](README.en.md)
 
-一个轻量的本地密码快捷查询工具，支持 macOS 和 Windows。通过全局快捷键即时查找并复制密码——快速、轻量、即用即走，体验如同输入法。
+Prompt Password 是一个本地密码快捷查询工具，主要面向 macOS 使用，后续继续兼容 Windows。它常驻后台，通过全局快捷键唤起搜索面板，快速找到密码并复制到剪贴板。
 
----
+这个项目适合个人使用。密码保存在本机 SQLite 数据库里，密码内容会用主密码（Master Password）派生出的密钥加密保存。
 
-## Core Features | 核心功能
+## 功能介绍
 
-| Feature | Description | 功能 | 说明 |
-|---------|-------------|------|------|
-| Hotkey Summon | Global hotkey to bring up the search panel | 快捷键唤起 | 全局热键调出搜索面板 |
-| Instant Search | Fuzzy search by site name / name / description / tags | 即时搜索 | 支持按网站名/名称/描述/标签进行模糊搜索 |
-| Masked Display | Password shows first 2 chars, rest masked (e.g. `Ab******`) | 打码展示 | 密码仅显示前两位，后续打码（如 `Ab******`） |
-| One-Click Copy | Auto-copy password to clipboard on selection | 一键复制 | 选中条目后自动复制密码到剪贴板 |
+- macOS 后台常驻，使用菜单栏托盘管理。
+- 全局快捷键唤起，macOS 默认是 `Cmd+Shift+K`，Windows 兼容配置默认是 `Ctrl+Shift+K`。
+- 本地加密保险库，使用主密码解锁。
+- 支持按名称、URL、描述、别名、账号、标签搜索。
+- 点击搜索结果即可复制密码。
+- 支持新增、编辑、删除密码条目。
+- 支持密码模板。模板只用于填入密码，不会和已有条目建立绑定关系。
+- 内置密码生成器：默认生成 12 位密码，包含数字、大写字母、小写字母，并且包含 2 个特殊字符。特殊字符来自 `!@#$%^&*,?`。
+- 设置页面支持开机启动、快捷键修改、锁定保险库、导入和导出。
+- 支持导出：
+  - 加密 JSON 备份，可用于恢复和导入。
+  - 明文 CSV，需要重新输入主密码验证。
+  - 明文 TXT，需要重新输入主密码验证。
+- 支持导入加密 JSON 备份。已有相同 `id` 或名称的条目、模板会跳过，不会覆盖。
 
-## Password Entry Data Model | 密码条目数据模型
+## 技术栈
 
-Each password entry contains the following fields:
+- Tauri 2
+- Rust
+- Preact + TypeScript
+- SQLite / `rusqlite`
+- AES-256-GCM
+- Argon2id
 
-| Field | Description | 字段 | 说明 |
-|-------|-------------|------|------|
-| Name | Identifier for the password entry | 名称 | 密码条目标识名 |
-| URL | Corresponding website URL | 网站链接 | 对应的网站 URL |
-| Description | Supplementary notes | 描述 | 补充说明 |
-| Alias | Hint when multiple accounts share the same password (e.g. "Birthday Password" → yyyymmdd format) | 密码别称 | 当多个账号共用同一密码时作提示用（如「生日密码」对应 yyyymmdd 格式） |
-| Password | The actual password value | 密码 | 实际密码值 |
-| Tags | Keywords for categorization and search | 标签 | 用于分类和搜索的关键词 |
+## 快速开始
 
-## Target Platforms | 目标平台
+安装依赖：
 
-- **macOS** (primary)
-- **Windows**
+```bash
+npm install
+```
 
-## Technology Direction | 技术方向
+开发模式启动：
 
-- **Shell**: Tauri 2.x
-- **Core**: Rust
-- **UI**: Preact + TypeScript
-- **Storage**: SQLite through `rusqlite`
-- **Target behavior**: macOS-first, Windows-compatible
+```bash
+npm run tauri dev
+```
 
-Prompt Password uses one shared codebase. Rust owns storage, search, clipboard, hotkeys, and platform adapters. Preact owns the compact search panel and entry form.
-Phase 1 stores data locally in SQLite only; encryption at rest is planned for a later phase.
+构建 macOS app：
 
-## Project Structure (Selected) | 项目结构（节选）
+```bash
+npm run tauri build -- --bundles app
+```
 
-This block lists the main working areas, not every file.
+构建后的 app 路径：
+
+```text
+src-tauri/target/release/bundle/macos/prompt-password.app
+```
+
+运行检查：
+
+```bash
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+## 使用说明
+
+### 第一次启动
+
+1. 打开应用。
+2. 输入一个新的主密码。
+3. 应用会创建本地加密保险库。
+4. 以后用同一个主密码解锁。
+
+主密码不会保存。如果忘记了，已经加密的保险库无法恢复。
+
+### 唤起和搜索
+
+- macOS 默认按 `Cmd+Shift+K` 唤起或隐藏搜索面板。
+- 输入关键词搜索条目。
+- 点击条目复制密码。
+- 可以用方向键选择条目，再按 `Enter` 复制。
+- 按 `Escape` 或点击窗口外部会隐藏面板。
+
+### 新增密码
+
+1. 点击搜索栏右侧的 `+`。
+2. 填写名称、URL、账号、标签和密码。
+3. 可以点击 `Generate` 生成默认规则的密码。
+4. 保存条目。
+
+编辑已有条目时，密码框不会显示旧密码。留空表示保留当前密码；输入或生成新密码则会替换旧密码。
+
+### 密码模板
+
+模板适合保存可重复使用的密码值，例如某些固定格式密码。
+
+- 选择模板只会把模板密码填入当前表单。
+- 模板不会和密码条目建立软连接。
+- 编辑模板不会影响已有密码条目。
+- 删除模板也不会影响已有密码条目。
+
+### 设置页面
+
+点击搜索栏右侧的齿轮按钮打开设置页面。
+
+当前支持：
+
+- 开机启动：macOS 下会在后台启动应用。
+- 快捷键：修改全局唤起快捷键，保存后立即重新注册。
+- 导入/导出：导入加密 JSON，导出 JSON/CSV/TXT。
+- 锁定保险库：立即清空当前内存里的保险库密钥，并回到解锁界面。
+
+### 导入和导出
+
+加密 JSON 备份：
+
+- 导出前需要重新输入主密码。
+- 文件里不包含明文密码。
+- 适合备份和多端同步。
+- 导入时需要使用同一个主密码解密。
+
+CSV / TXT 导出：
+
+- 导出前需要重新输入主密码。
+- 文件里包含明文密码。
+- 只适合临时迁移或人工检查，用完后建议删除。
+- CSV 会对所有字段加双引号，并转义字段里的双引号。密码里有逗号、换行、引号时，CSV 结构不会被破坏。
+
+## 数据和安全说明
+
+- 数据保存在本机。
+- 密码内容加密保存。
+- 名称、URL、账号、标签等搜索字段是明文保存的，目的是支持本地快速搜索。
+- 应用只在复制、使用模板、导出、导入时短暂解密密码。
+- JSON 备份是加密文件。
+- CSV 和 TXT 是明文导出文件。
+
+## 多端同步建议
+
+短期最稳的方式是使用加密 JSON 备份：
+
+1. 在一台设备上导出加密 JSON。
+2. 把 JSON 放到 iCloud Drive、Dropbox、OneDrive 等同步目录。
+3. 在另一台设备上导入这个 JSON。
+
+不建议直接同步 SQLite 数据库文件。多端同时写入时容易出现覆盖、冲突，甚至数据库损坏。
+
+如果以后要做真正的多端同步，更合适的方案是同步端到端加密的变更日志，而不是同步正在使用的数据库文件。
+
+## 项目结构
 
 ```text
 prompt-password/
-├── src/                         # Shared Preact UI
-│   ├── components/              # Search panel and entry form components
-│   ├── hooks/                   # UI data and clipboard hooks
-│   ├── lib/                     # Typed Tauri invoke wrappers
+├── src/                         # Preact 前端
+│   ├── components/              # 搜索、表单、设置页面
+│   ├── hooks/                   # 前端 hooks
+│   ├── lib/                     # Tauri 调用封装
 │   ├── App.tsx
 │   └── main.tsx
-├── src-tauri/                   # Rust/Tauri application shell
+├── src-tauri/                   # Rust / Tauri 应用层
 │   ├── src/
-│   │   ├── commands/            # Tauri commands exposed to the UI
-│   │   ├── core/                # Pure product logic
-│   │   ├── db/                  # SQLite initialization and queries
-│   │   ├── platform/            # OS-specific adapters
+│   │   ├── commands/            # 暴露给前端的 Tauri 命令
+│   │   ├── core/                # 保险库和条目逻辑
+│   │   ├── crypto/              # 加密和密钥派生
+│   │   ├── db/                  # SQLite schema 和查询
+│   │   ├── platform/            # 快捷键、托盘、开机启动、窗口行为
 │   │   ├── lib.rs
 │   │   └── main.rs
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── docs/superpowers/
 ├── package.json
 └── vite.config.ts
 ```
 
-## Development Phases | 开发阶段
+## 许可证
 
-| Phase | Scope | 阶段 | 范围 |
-|-------|-------|------|------|
-| Phase 1 | Minimum viable — hotkey + search + copy | 第一阶段 | 最小可用 — 快捷键 + 搜索 + 复制 |
-| Phase 2 | Core experience — complete happy path | 第二阶段 | 核心体验 — 完整主流程 |
-| Phase 3 | Edge cases — error handling, polish | 第三阶段 | 边界处理 — 错误处理、打磨 |
-| Phase 4 | Optimization — performance, monitoring | 第四阶段 | 优化 — 性能、监控 |
-
-## License
-
-Private — for personal use only.
+私有项目，仅供个人使用。

@@ -23,14 +23,23 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             commands::search::search_entries,
-            commands::entry::get_entry,
             commands::entry::create_entry,
+            commands::entry::update_entry,
+            commands::entry::delete_entry,
+            commands::generator::generate_password,
+            commands::backup::export_vault_backup,
+            commands::backup::import_vault_backup,
             commands::clipboard::copy_to_clipboard,
             commands::clipboard::copy_entry_password,
             commands::vault::unlock_vault,
             commands::vault::lock_vault,
+            commands::settings::get_app_settings,
+            commands::settings::set_auto_start_enabled,
+            commands::settings::set_global_hotkey,
             commands::template::search_password_templates,
             commands::template::create_password_template,
+            commands::template::update_password_template,
+            commands::template::delete_password_template,
             commands::template::use_password_template,
         ])
         .setup(|app| {
@@ -39,17 +48,6 @@ pub fn run() {
                 .expect("main window must exist");
             platform::window::configure_main_window(&window);
 
-            let hotkey = platform::hotkey::default_hotkey_spec();
-            app.global_shortcut()
-                .register(hotkey.to_tauri_shortcut())
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "failed to register global shortcut {}: {}",
-                        hotkey.label(),
-                        e
-                    )
-                });
-
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -57,8 +55,13 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).expect("failed to create app data dir");
             let db_path = app_data_dir.join("prompt-password.db");
             let conn = db::init::initialize(&db_path).expect("failed to initialize database");
+            let hotkey = commands::settings::stored_hotkey_or_default(&conn);
+            app.global_shortcut().register(hotkey.as_str()).unwrap_or_else(|e| {
+                panic!("failed to register global shortcut {}: {}", hotkey, e)
+            });
             app.manage(Mutex::new(conn));
             app.manage(Mutex::new(core::vault::VaultSession::default()));
+            platform::tray::configure_tray(app).expect("failed to configure tray");
 
             Ok(())
         })

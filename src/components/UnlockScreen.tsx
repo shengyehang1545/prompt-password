@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { unlockVault } from "../lib/tauri";
+import { inputGuards } from "../lib/inputGuards";
 
 interface UnlockScreenProps {
   onUnlocked: () => void;
@@ -58,6 +59,7 @@ export function UnlockScreen({ onUnlocked }: UnlockScreenProps) {
             value={masterPassword}
             onInput={(e) => setMasterPassword((e.target as HTMLInputElement).value)}
             autocomplete="current-password"
+            {...inputGuards}
           />
         </div>
         {error && <div class="form-error">{error}</div>}

@@ -40,6 +40,12 @@ pub fn initialize_connection(conn: Connection) -> Result<Connection> {
             password_nonce TEXT NOT NULL DEFAULT '',
             created_at     TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key            TEXT PRIMARY KEY,
+            value          TEXT NOT NULL,
+            updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
         );",
     )?;
 
@@ -186,7 +192,7 @@ mod tests {
 
         let table_count: i64 = conn
             .query_row(
-                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('entries', 'entries_fts', 'password_templates', 'password_templates_fts', 'vault_meta')",
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('entries', 'entries_fts', 'password_templates', 'password_templates_fts', 'vault_meta', 'app_settings')",
                 [],
                 |row| row.get(0),
             )
@@ -206,7 +212,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(table_count, 5);
+        assert_eq!(table_count, 6);
         assert_eq!(trigger_count, 6);
         assert_eq!(account_columns, 1);
     }

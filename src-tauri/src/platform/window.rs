@@ -16,10 +16,20 @@ pub fn toggle_main_window(app: &tauri::AppHandle) {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
         } else {
-            let _ = window.show();
-            let _ = window.set_focus();
+            show_window(&window);
         }
     }
+}
+
+pub fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        show_window(&window);
+    }
+}
+
+fn show_window(window: &WebviewWindow) {
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 fn hide_on_blur(window: &WebviewWindow) {

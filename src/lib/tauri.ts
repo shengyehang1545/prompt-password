@@ -11,20 +11,6 @@ export interface EntrySearchResult {
   password_preview: string;
 }
 
-export interface Entry {
-  id: string;
-  name: string;
-  url: string;
-  description: string;
-  alias: string;
-  account: string;
-  password_enc: string;
-  password_nonce: string;
-  tags: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface CreateEntryPayload {
   name: string;
   url?: string;
@@ -32,6 +18,17 @@ export interface CreateEntryPayload {
   alias?: string;
   account?: string;
   password: string;
+  tags?: string;
+}
+
+export interface UpdateEntryPayload {
+  id: string;
+  name: string;
+  url?: string;
+  description?: string;
+  alias?: string;
+  account?: string;
+  password?: string;
   tags?: string;
 }
 
@@ -48,8 +45,34 @@ export interface CreatePasswordTemplatePayload {
   password: string;
 }
 
+export interface UpdatePasswordTemplatePayload {
+  id: string;
+  name: string;
+  description?: string;
+  password?: string;
+}
+
 export interface UsedPasswordTemplate {
   password: string;
+}
+
+export type ExportFormat = "json" | "csv" | "txt";
+
+export interface BackupFile {
+  filename: string;
+  content: string;
+}
+
+export interface ImportSummary {
+  imported_entries: number;
+  skipped_entries: number;
+  imported_templates: number;
+  skipped_templates: number;
+}
+
+export interface AppSettings {
+  auto_start_enabled: boolean;
+  hotkey: string;
 }
 
 export function unlockVault(masterPassword: string): Promise<boolean> {
@@ -64,11 +87,7 @@ export function searchEntries(query: string): Promise<EntrySearchResult[]> {
   return invoke("search_entries", { query });
 }
 
-export function getEntry(id: string): Promise<Entry> {
-  return invoke("get_entry", { id });
-}
-
-export function createEntry(payload: CreateEntryPayload): Promise<Entry> {
+export function createEntry(payload: CreateEntryPayload): Promise<EntrySearchResult> {
   return invoke("create_entry", {
     name: payload.name,
     url: payload.url ?? null,
@@ -78,6 +97,53 @@ export function createEntry(payload: CreateEntryPayload): Promise<Entry> {
     password: payload.password,
     tags: payload.tags ?? null,
   });
+}
+
+export function updateEntry(payload: UpdateEntryPayload): Promise<EntrySearchResult> {
+  return invoke("update_entry", {
+    id: payload.id,
+    name: payload.name,
+    url: payload.url ?? null,
+    description: payload.description ?? null,
+    alias: payload.alias ?? null,
+    account: payload.account ?? null,
+    password: payload.password ?? null,
+    tags: payload.tags ?? null,
+  });
+}
+
+export function deleteEntry(id: string): Promise<void> {
+  return invoke("delete_entry", { id });
+}
+
+export function generatePassword(): Promise<string> {
+  return invoke("generate_password");
+}
+
+export function exportVaultBackup(
+  masterPassword: string,
+  format: ExportFormat
+): Promise<BackupFile> {
+  return invoke("export_vault_backup", { masterPassword, format });
+}
+
+export function importVaultBackup(
+  masterPassword: string,
+  backupJson: string
+): Promise<ImportSummary> {
+  return invoke("import_vault_backup", { masterPassword, backupJson });
+}
+
+export function getAppSettings(): Promise<AppSettings> {
+  return invoke("get_app_settings");
+}
+
+export function setAutoStartEnabled(enabled: boolean): Promise<AppSettings> {
+  return invoke("set_auto_start_enabled", { enabled });
+}
+
+export function setGlobalHotkey(hotkey: string): Promise<AppSettings> {
+  return invoke("set_global_hotkey", { hotkey });
 }
 
 export function copyToClipboard(text: string): Promise<void> {
@@ -102,6 +168,21 @@ export function createPasswordTemplate(
     description: payload.description ?? null,
     password: payload.password,
   });
+}
+
+export function updatePasswordTemplate(
+  payload: UpdatePasswordTemplatePayload
+): Promise<PasswordTemplateSearchResult> {
+  return invoke("update_password_template", {
+    id: payload.id,
+    name: payload.name,
+    description: payload.description ?? null,
+    password: payload.password ?? null,
+  });
+}
+
+export function deletePasswordTemplate(id: string): Promise<void> {
+  return invoke("delete_password_template", { id });
 }
 
 export function usePasswordTemplate(id: string): Promise<UsedPasswordTemplate> {

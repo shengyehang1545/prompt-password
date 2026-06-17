@@ -71,6 +71,51 @@
   letter-spacing: 0.5px;
 }
 
+.entry-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 10px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.entry-item:hover .entry-item__actions,
+.entry-item:focus-within .entry-item__actions {
+  opacity: 1;
+}
+
+.entry-item--copied .entry-item__actions,
+.entry-item--failed .entry-item__actions {
+  opacity: 0;
+}
+
+.entry-item__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.entry-item__action:hover {
+  background: var(--bg-base);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.entry-item__action--danger:hover {
+  color: var(--failed-text);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
 .entry-item__copied-badge,
 .entry-item__failed-badge {
   position: absolute;

@@ -38,6 +38,31 @@ pub fn normalize_create_entry(
     })
 }
 
+pub fn normalize_update_entry(
+    name: String,
+    url: Option<String>,
+    description: Option<String>,
+    alias: Option<String>,
+    account: Option<String>,
+    password: Option<String>,
+    tags: Option<String>,
+) -> Result<NormalizedEntryInput, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("name is required".to_string());
+    }
+
+    Ok(NormalizedEntryInput {
+        name,
+        url: trim_optional(url),
+        description: trim_optional(description),
+        alias: trim_optional(alias),
+        account: trim_optional(account),
+        password: password.unwrap_or_default(),
+        tags: trim_optional(tags),
+    })
+}
+
 fn trim_optional(value: Option<String>) -> String {
     value.unwrap_or_default().trim().to_string()
 }
@@ -96,5 +121,40 @@ mod tests {
         assert_eq!(input.account, "octocat");
         assert_eq!(input.password, "  secret  ");
         assert_eq!(input.tags, "dev,code");
+    }
+
+    #[test]
+    fn normalize_update_entry_allows_omitted_password() {
+        let input = normalize_update_entry(
+            "  GitHub  ".to_string(),
+            Some("  https://github.com  ".to_string()),
+            None,
+            None,
+            Some("  octocat  ".to_string()),
+            None,
+            Some("  dev  ".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(input.name, "GitHub");
+        assert_eq!(input.url, "https://github.com");
+        assert_eq!(input.account, "octocat");
+        assert_eq!(input.password, "");
+        assert_eq!(input.tags, "dev");
+    }
+
+    #[test]
+    fn normalize_update_entry_rejects_blank_name() {
+        let result = normalize_update_entry(
+            "   ".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert_eq!(result.unwrap_err(), "name is required");
     }
 }

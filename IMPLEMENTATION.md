@@ -1,414 +1,204 @@
-# Prompt Password — Implementation Plan | 实施文档
+# Prompt Password 实施状态
 
-> Version: 1.0 | Date: 2026-06-11
-> Issue: SYD-2
+> 更新时间：2026-06-17  
+> 当前分支：`feat/cross-platform-initialization`  
+> 当前目标：完成 macOS 密码快捷查询工具的首轮可用版本，并保留后续 Windows 适配路径。
 
----
+## 当前结论
 
-## 1. Technology Selection | 技术选型
+项目已从早期方案阶段进入可体验阶段。当前实现基于 Tauri 2、Rust、Preact 和 SQLite，核心路径是：
 
-### 1.1 Cross-Platform Framework: Tauri 2.x
+1. 用户输入 Master Password 解锁本地保险库。
+2. 应用在 macOS 后台常驻，通过 `Cmd+Shift+K` 唤起搜索面板。
+3. 用户搜索密码条目，点击或按 `Enter` 复制密码。
+4. 密码内容加密保存，搜索字段明文保存以支持本地快速搜索。
 
-| Option | Bundle Size | Memory | Hotkey Support | Verdict |
-|--------|------------|--------|----------------|---------|
-| **Tauri 2.x** | ~3–5 MB | ~10–20 MB | Native via `tauri-plugin-global-shortcut` | **Selected** |
-| Electron | ~80–120 MB | ~100+ MB | Requires `globalShortcut` module | Rejected — too heavy for a utility app |
+Windows 不再单独重写一个完整版本，而是在同一套 Tauri/Rust/Preact 代码里保留跨平台结构。当前 Windows 托盘和开机启动行为仍需后续在真实 Windows 环境验收。
 
-**Rationale**: Prompt Password is a lightweight utility that should launch instantly. Tauri's Rust backend provides native hotkey registration, small bundle, and low memory. Tauri 2.x stabilised cross-platform support and has first-class plugins for global shortcuts, clipboard, and filesystem.
+## 已完成范围
 
-### 1.2 Frontend: Vanilla TypeScript + Preact
+### 应用基础
 
-| Option | Bundle Size | Dev Experience | Verdict |
-|--------|------------|----------------|---------|
-| **Preact + TypeScript** | ~4 KB runtime | Lightweight, hooks-based | **Selected** |
-| React | ~40 KB runtime | Familiar ecosystem | Rejected — unnecessary overhead for a single-panel UI |
-| Svelte | ~2 KB runtime | Compile-time | Viable alternative, but Preact's TSX is more conventional |
+- Tauri 2 项目结构已建立。
+- 前端使用 Preact + TypeScript。
+- 后端使用 Rust 命令暴露给前端。
+- 本地数据使用 SQLite。
+- macOS app 图标已重新生成，处理了 Dock 图标黑边问题。
 
-**Rationale**: The UI is a single search panel — a text input and a filtered list. Preact provides React-like ergonomics at minimal cost.
+### 保险库和安全
 
-### 1.3 Data Storage: SQLite (via `rusqlite`) + AES-256-GCM Encryption
+- 支持 Master Password 初始化和解锁。
+- 使用 Argon2id 从 Master Password 派生密钥。
+- 使用 AES-256-GCM 加密密码字段。
+- 密钥只保存在当前进程内存里。
+- 支持锁定保险库，锁定后需要重新输入 Master Password。
+- 搜索结果不展示明文密码。
+- 编辑已有条目时不会回显旧密码；密码输入留空表示保留原密码。
 
-| Option | Query Performance | Encryption | Verdict |
-|--------|-------------------|------------|---------|
-| **SQLite + AES-256-GCM** | Indexed fuzzy search | Field-level encryption in Rust | **Selected** |
-| JSON file | Linear scan for search | Whole-file encryption | Rejected — no indexing, poor search at scale |
-| sled / redb | Key-value only | Manual | Rejected — overkill, no SQL ergonomics |
+### 密码条目
 
-**Rationale**: SQLite provides indexed queries for fuzzy search. Password fields are encrypted at rest using AES-256-GCM with a key derived from a user master password via Argon2id. Non-sensitive fields (name, URL, tags) are stored in plaintext for fast search.
+- 支持新增、编辑、删除密码条目。
+- 支持名称、URL、描述、别名、账号、标签等字段。
+- 支持按本地字段搜索。
+- 点击结果或键盘确认后复制密码。
+- 复制完成后保留短暂状态反馈，避免因为鼠标点击导致体验中断。
 
-### 1.4 Dependency Summary
+### 密码模板
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Shell | Tauri | 2.x |
-| Backend | Rust | 1.80+ |
-| Frontend | Preact + TypeScript | Preact 10.x, TS 5.x |
-| Database | SQLite via `rusqlite` | 0.32+ |
-| Encryption | `aes-gcm` + `argon2` crates | latest |
-| Password Gen | `rand` crate | 0.8+ |
-| Fuzzy Search | `fuse-rust` or custom SQLite FTS5 | — |
-| Build | Vite | 6.x |
-| Bundle | tauri-bundler | (via Tauri CLI) |
+- 支持新增、编辑、删除模板。
+- 模板密码输入支持可见/隐藏切换。
+- 模板只负责填入当前表单密码。
+- 模板与具体密码条目之间没有软连接。
+- 编辑或删除模板不会影响任何已有密码条目。
 
----
+### 密码生成器
 
-## 2. Architecture Design | 架构设计
+- 默认生成 12 位密码。
+- 至少包含 1 个数字、1 个大写字母、1 个小写字母。
+- 默认包含 2 个特殊字符。
+- 特殊字符只从 `!@#$%^&*,?` 中选择。
+- 新增或编辑条目时可以直接生成密码并填入表单。
 
-### 2.1 System Layers
+### macOS 后台运行
 
-```
-┌─────────────────────────────────────────────────┐
-│             Global Hotkey Layer                  │  Rust (tauri-plugin-global-shortcut)
-│   Registers system-wide shortcut, shows/hides   │
-│   the search window on key press                │
-├─────────────────────────────────────────────────┤
-│             Search Panel UI                      │  Preact + TypeScript (renderer)
-│   Text input → fuzzy matching → filtered list   │
-│   Password masking (Ab******) → clipboard copy  │
-├─────────────────────────────────────────────────┤
-│             Data & Crypto Layer                  │  Rust (core)
-│   SQLite storage, field-level encryption,       │
-│   CRUD commands, Argon2id key derivation        │
-└─────────────────────────────────────────────────┘
-```
+- macOS 下使用菜单栏托盘。
+- 应用可隐藏 Dock 图标并作为后台工具运行。
+- 托盘菜单支持显示窗口、锁定保险库、退出。
+- 窗口隐藏后可通过全局快捷键重新唤起。
 
-### 2.2 Module Breakdown
+### 设置页面
 
-```
+- 支持开机启动设置。
+- 支持自定义全局快捷键。
+- 支持锁定保险库。
+- 支持导入和导出。
+- 默认快捷键：
+  - macOS：`Cmd+Shift+K`
+  - Windows 兼容配置：`Ctrl+Shift+K`
+
+### 导入和导出
+
+- 支持导出加密 JSON 备份。
+- 支持导出明文 CSV。
+- 支持导出明文 TXT。
+- 导出前需要重新输入 Master Password 验证。
+- JSON 导出不包含明文密码，适合备份和同步流转。
+- CSV/TXT 是明文导出，只适合临时迁移或人工检查。
+- CSV 对所有字段加双引号，并转义字段中的双引号；密码包含逗号、换行、引号时不会破坏 CSV 结构。
+- 支持导入加密 JSON 备份。
+- 导入时遇到相同 `id` 或名称的条目、模板会跳过，不覆盖已有数据。
+
+### 输入体验
+
+- 已关闭输入框的拼写检查、自动纠正和自动大小写。
+- 搜索、解锁、添加、编辑、设置等输入路径都应用了同一套输入属性。
+
+## 当前架构
+
+```text
 prompt-password/
-├── src-tauri/                          # Rust backend
-│   ├── Cargo.toml
-│   ├── src/
-│   │   ├── main.rs                     # Tauri entry, window config
-│   │   ├── commands/
-│   │   │   ├── mod.rs
-│   │   │   ├── search.rs              # Tauri command: fuzzy search entries
-│   │   │   ├── entry.rs               # Tauri command: CRUD for entries
-│   │   │   ├── clipboard.rs           # Tauri command: copy to clipboard
-│   │   │   └── generator.rs           # Tauri command: random password generation
-│   │   ├── db/
-│   │   │   ├── mod.rs
-│   │   │   ├── init.rs                # SQLite init, migrations
-│   │   │   └── queries.rs             # SQL query helpers
-│   │   ├── crypto/
-│   │   │   ├── mod.rs
-│   │   │   ├── kdf.rs                 # Argon2id key derivation
-│   │   │   ├── encrypt.rs             # AES-256-GCM encrypt
-│   │   │   └── decrypt.rs             # AES-256-GCM decrypt
-│   │   ├── generator/
-│   │   │   ├── mod.rs
-│   │   │   └── password.rs            # Random password generation
-│   │   └── hotkey.rs                  # Global shortcut registration
-│   └── tauri.conf.json
-├── src/                                # Frontend (Vite + Preact)
-│   ├── App.tsx                         # Root component
+├── src/
+│   ├── App.tsx
 │   ├── components/
-│   │   ├── SearchInput.tsx             # Search text input
-│   │   ├── EntryList.tsx              # Filtered result list
-│   │   ├── EntryItem.tsx              # Single entry row (masked password)
-│   │   ├── MaskedPassword.tsx         # "Ab******" display component
-│   │   └── PasswordGenerator.tsx      # Random password generator widget
-│   ├── hooks/
-│   │   ├── useSearch.ts               # Fuzzy search hook (debounced)
-│   │   └── useClipboard.ts            # Clipboard copy hook
-│   ├── lib/
-│   │   └── tauri.ts                   # Typed Tauri invoke wrappers
-│   ├── main.tsx                        # Preact entry
-│   └── index.html
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── IMPLEMENTATION.md                   # This file
+│   │   ├── AddEntryForm.tsx
+│   │   ├── EntryItem.tsx
+│   │   ├── EntryList.tsx
+│   │   ├── SearchInput.tsx
+│   │   ├── SettingsModal.tsx
+│   │   └── UnlockScreen.tsx
+│   └── lib/
+│       ├── inputGuards.ts
+│       └── tauri.ts
+└── src-tauri/
+    └── src/
+        ├── commands/
+        │   ├── backup.rs
+        │   ├── clipboard.rs
+        │   ├── entry.rs
+        │   ├── generator.rs
+        │   ├── search.rs
+        │   ├── settings.rs
+        │   ├── template.rs
+        │   └── vault.rs
+        ├── core/
+        │   ├── entry_input.rs
+        │   └── vault.rs
+        ├── crypto/
+        ├── db/
+        │   ├── init.rs
+        │   └── queries.rs
+        └── platform/
+            ├── hotkey.rs
+            ├── startup.rs
+            ├── tray.rs
+            └── window.rs
 ```
 
-### 2.3 IPC Contract (Tauri Commands)
+## 后端命令范围
 
-| Command | Params | Returns | Description |
-|---------|--------|---------|-------------|
-| `search_entries` | `query: string` | `Vec<EntrySearchResult>` | Fuzzy search across name/url/description/tags |
-| `get_entry` | `id: string` | `Entry` | Full entry with decrypted password |
-| `create_entry` | `EntryInput` | `Entry` | Create new entry |
-| `update_entry` | `id: string, EntryInput` | `Entry` | Update existing entry |
-| `delete_entry` | `id: string` | `()` | Delete entry |
-| `copy_to_clipboard` | `text: string` | `()` | Copy password to system clipboard |
-| `unlock_vault` | `master_password: string` | `bool` | Derive key, verify, store in memory |
-| `lock_vault` | — | `()` | Clear decryption key from memory |
-| `generate_password` | `GeneratorConfig` | `string` | Generate a random password and copy to clipboard |
+| 命令 | 当前用途 |
+|------|----------|
+| `unlock_vault` | 初始化或解锁保险库 |
+| `lock_vault` | 清空当前内存密钥并锁定保险库 |
+| `search_entries` | 搜索密码条目 |
+| `create_entry` | 新增条目 |
+| `update_entry` | 编辑条目，密码为空时保留旧密码 |
+| `delete_entry` | 删除条目 |
+| `copy_entry_password` | 解密并复制指定条目的密码 |
+| `generate_password` | 生成默认规则密码 |
+| `list_password_templates` | 列出模板 |
+| `create_password_template` | 新增模板 |
+| `update_password_template` | 编辑模板 |
+| `delete_password_template` | 删除模板 |
+| `use_password_template` | 解密模板密码并填入表单 |
+| `export_backup` | 导出 JSON/CSV/TXT |
+| `import_backup` | 导入加密 JSON |
+| `get_app_settings` | 读取设置 |
+| `set_auto_start_enabled` | 设置开机启动 |
+| `set_global_hotkey` | 设置全局快捷键 |
 
-### 2.4 Password Generator
+## 数据安全边界
 
-A built-in password generator available when creating or editing entries. One click generates a strong random password, fills the password field, and copies it to clipboard.
+- 密码字段加密保存。
+- 搜索字段为明文，包括名称、URL、描述、别名、账号、标签。
+- JSON 备份仍然是加密数据。
+- CSV/TXT 导出是明文数据，导出前必须重新验证 Master Password。
+- 当前开发和验收过程中不应读取本地数据库的密码明文字段，也不应通过查询绕过应用流程查看真实密码。
 
-**Default rules**: 12 characters, includes uppercase + lowercase + digits + 2 special characters. User can configure length and special character count.
+## 验收命令
 
-**Character pool**:
-- Uppercase: `A-Z`
-- Lowercase: `a-z`
-- Digits: `0-9`
-- Special characters: `!@#$%^&*()-_=+`
-
-**Generation algorithm**: Use `rand` crate's CSPRNG (`OsRng`). Shuffle guaranteed minimum characters (1 upper, 1 lower, 1 digit, N special) with Fisher-Yates, then fill remaining slots from the full pool.
-
-```rust
-struct GeneratorConfig {
-    length: u32,              // default: 12
-    special_count: u32,       // default: 2
-}
+```bash
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+npm run tauri build -- --bundles app
 ```
 
-**UI flow**: In the entry form, a "Generate" button next to the password field. Clicking it generates a password, fills the field, and copies to clipboard with a brief "Copied!" toast.
+构建后的 macOS app：
 
----
-
-## 3. Data Model | 数据模型
-
-### 3.1 Password Entry Schema
-
-```sql
-CREATE TABLE entries (
-    id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    name        TEXT NOT NULL,                        -- 名称 (plaintext, searchable)
-    url         TEXT NOT NULL DEFAULT '',              -- 网站链接 (plaintext, searchable)
-    description TEXT NOT NULL DEFAULT '',              -- 描述 (plaintext, searchable)
-    alias       TEXT NOT NULL DEFAULT '',              -- 密码别称 (plaintext, searchable)
-    password_enc TEXT NOT NULL,                        -- 密码 (AES-256-GCM encrypted, base64)
-    password_nonce TEXT NOT NULL,                      -- AES nonce (base64)
-    tags        TEXT NOT NULL DEFAULT '',              -- 标签, comma-separated (plaintext, searchable)
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- FTS5 virtual table for fuzzy search
-CREATE VIRTUAL TABLE entries_fts USING fts5(
-    name, url, description, alias, tags,
-    content=entries,
-    content_rowid=rowid
-);
-
--- Triggers to keep FTS in sync
-CREATE TRIGGER entries_ai AFTER INSERT ON entries BEGIN
-    INSERT INTO entries_fts(rowid, name, url, description, alias, tags)
-    VALUES (new.rowid, new.name, new.url, new.description, new.alias, new.tags);
-END;
-
-CREATE TRIGGER entries_ad AFTER DELETE ON entries BEGIN
-    INSERT INTO entries_fts(entries_fts, rowid, name, url, description, alias, tags)
-    VALUES ('delete', old.rowid, old.name, old.url, old.description, old.alias, old.tags);
-END;
-
-CREATE TRIGGER entries_au AFTER UPDATE ON entries BEGIN
-    INSERT INTO entries_fts(entries_fts, rowid, name, url, description, alias, tags)
-    VALUES ('delete', old.rowid, old.name, old.url, old.description, old.alias, old.tags);
-    INSERT INTO entries_fts(rowid, name, url, description, alias, tags)
-    VALUES (new.rowid, new.name, new.url, new.description, new.alias, new.tags);
-END;
+```text
+src-tauri/target/release/bundle/macos/prompt-password.app
 ```
 
-### 3.2 Encryption Scheme
+## 手工验收重点
 
-```
-Master Password (user input)
-        │
-        ▼
-   Argon2id (m=65536, t=3, p=2)
-        │
-        ▼
-   256-bit DEK (Data Encryption Key)
-        │
-        ▼
-   AES-256-GCM encrypt/decrypt password field
-        │
-        ├── Random 96-bit nonce per entry
-        ├── Associated data: entry id (binds ciphertext to entry)
-        └── Output: base64(ciphertext + tag)
-```
+1. 首次启动后设置 Master Password。
+2. 使用 `Cmd+Shift+K` 唤起和隐藏窗口。
+3. 新增、搜索、复制密码。
+4. 新增密码时使用生成器，确认规则为 12 位且包含 2 个指定特殊字符。
+5. 编辑条目时确认旧密码不会回显，留空不会替换旧密码。
+6. 删除条目后确认搜索结果更新。
+7. 新增、编辑、删除模板，确认不影响已有条目。
+8. 设置页修改快捷键后确认新快捷键生效。
+9. 开启开机启动后确认 LaunchAgent 创建成功。
+10. 锁定保险库后确认需要重新输入 Master Password。
+11. 导出 JSON，确认不能看到明文密码。
+12. 导出 CSV/TXT 前确认需要重新输入 Master Password。
+13. 导入 JSON 后确认重复条目不会覆盖已有数据。
 
-**Key Management**:
-- DEK is derived on `unlock_vault` and held in a `Zeroizing` wrapper (`zeroize` crate) in Rust process memory.
-- DEK is never written to disk.
-- On `lock_vault` or app exit, DEK memory is zeroed.
-- Master password verification: store a known-plaintext verification blob (encrypted with DEK) at vault creation; attempt decrypt on unlock to verify.
+## 未完成和后续事项
 
-### 3.3 TypeScript Types
-
-```typescript
-interface Entry {
-  id: string;
-  name: string;
-  url: string;
-  description: string;
-  alias: string;
-  password: string;        // decrypted, only in memory after unlock
-  tags: string[];          // split from comma-separated storage
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface EntrySearchResult {
-  id: string;
-  name: string;
-  url: string;
-  description: string;
-  alias: string;
-  tags: string[];
-  passwordPreview: string;  // e.g. "Ab******"
-}
-
-interface EntryInput {
-  name: string;
-  url?: string;
-  description?: string;
-  alias?: string;
-  password: string;
-  tags?: string[];
-}
-```
-
----
-
-## 4. Phased Implementation Plan | 分阶段实施计划
-
-### Phase 1: Minimum Viable — Hotkey + Search + Copy
-
-> Goal: Press hotkey → type query → see results → copy password. No encryption yet.
-
-| Step | Action | Files | Dependencies | Risk |
-|------|--------|-------|-------------|------|
-| 1.1 | Initialize Tauri 2.x project with Vite + Preact + TypeScript | `package.json`, `src-tauri/Cargo.toml`, `vite.config.ts`, `tsconfig.json` | None | Low |
-| 1.2 | Configure Tauri window: frameless, always-on-top, centered, hide-on-blur | `src-tauri/tauri.conf.json`, `src-tauri/src/main.rs` | 1.1 | Low |
-| 1.3 | Register global hotkey (default `Cmd+Shift+P` / `Ctrl+Shift+P`) | `src-tauri/src/hotkey.rs` | 1.1 | Medium — OS permissions |
-| 1.4 | Create search panel UI: input + result list | `src/App.tsx`, `src/components/SearchInput.tsx`, `src/components/EntryList.tsx`, `src/components/EntryItem.tsx` | 1.2 | Low |
-| 1.5 | Implement SQLite storage with plaintext passwords (no encryption) | `src-tauri/src/db/init.rs`, `src-tauri/src/db/queries.rs` | 1.1 | Low |
-| 1.6 | Implement Tauri commands: search, copy, CRUD | `src-tauri/src/commands/search.rs`, `src-tauri/src/commands/entry.rs`, `src-tauri/src/commands/clipboard.rs` | 1.4, 1.5 | Low |
-| 1.7 | Wire frontend to backend: search + copy flow | `src/hooks/useSearch.ts`, `src/hooks/useClipboard.ts`, `src/lib/tauri.ts` | 1.4, 1.6 | Low |
-| 1.8 | Keyboard navigation: arrow keys + Enter to select | `src/components/EntryList.tsx` | 1.7 | Low |
-
-**Phase 1 Acceptance Criteria**:
-- [ ] Global hotkey shows/hides the search panel
-- [ ] Typing in search input filters entries in real-time
-- [ ] Selecting an entry copies password to clipboard
-- [ ] Clicking outside the panel hides it
-- [ ] App launches on macOS and Windows
-
----
-
-### Phase 2: Core Experience — Secure Display + Encryption
-
-> Goal: Full security model — encrypted vault, password masking, unlock flow.
-
-| Step | Action | Files | Dependencies | Risk |
-|------|--------|-------|-------------|------|
-| 2.1 | Implement Argon2id key derivation | `src-tauri/src/crypto/kdf.rs` | 1.5 | Low |
-| 2.2 | Implement AES-256-GCM encrypt/decrypt | `src-tauri/src/crypto/encrypt.rs`, `src-tauri/src/crypto/decrypt.rs` | 2.1 | Medium — correctness critical |
-| 2.3 | Add vault migration: encrypt existing plaintext passwords | `src-tauri/src/db/init.rs` (migration) | 2.2 | Medium — data loss risk |
-| 2.4 | Implement `unlock_vault` / `lock_vault` commands | `src-tauri/src/commands/mod.rs` | 2.1, 2.2 | Low |
-| 2.5 | Add unlock screen UI (master password input) | `src/components/UnlockScreen.tsx` | 2.4 | Low |
-| 2.6 | Implement password masking component (first 2 chars + asterisks) | `src/components/MaskedPassword.tsx` | 1.4 | Low |
-| 2.7 | Update search results to return masked passwords | `src-tauri/src/commands/search.rs` | 2.3, 2.6 | Low |
-| 2.8 | Add entry management UI (add/edit/delete) | `src/components/EntryForm.tsx`, `src/components/EntryDetail.tsx` | 1.6, 2.3 | Low |
-| 2.9 | Auto-lock after inactivity timeout (5 min) | `src-tauri/src/main.rs` | 2.4 | Low |
-| 2.10 | Implement password generator: Rust command + frontend widget | `src-tauri/src/generator/password.rs`, `src-tauri/src/commands/generator.rs`, `src/components/PasswordGenerator.tsx` | 1.6, 2.8 | Low |
-
-**Phase 2 Acceptance Criteria**:
-- [ ] Vault is encrypted at rest — passwords not readable without master password
-- [ ] Search results show `Ab******` format, never full password
-- [ ] Selecting an entry copies decrypted password to clipboard
-- [ ] Unlock screen appears on app launch and after auto-lock
-- [ ] Can add, edit, and delete entries through UI
-- [ ] Master password verification rejects wrong passwords
-- [ ] New entry form has "Generate" button that creates a random password (default 12 chars, 2 special) and copies to clipboard
-
----
-
-### Phase 3: Edge Cases — Error Handling, Import/Export, Polish
-
-> Goal: Production-ready robustness.
-
-| Step | Action | Files | Dependencies | Risk |
-|------|--------|-------|-------------|------|
-| 3.1 | Error handling: DB errors, crypto errors, clipboard failures | All command files | 2.x | Low |
-| 3.2 | Empty state UI (no entries, no search results) | `src/components/EmptyState.tsx` | 1.4 | Low |
-| 3.3 | CSV import for bulk entry creation | `src-tauri/src/commands/import.rs` | 2.3 | Low |
-| 3.4 | Encrypted JSON export/backup | `src-tauri/src/commands/export.rs` | 2.2 | Medium — export security |
-| 3.5 | Duplicate detection on entry creation | `src-tauri/src/commands/entry.rs` | 1.6 | Low |
-| 3.6 | Password strength indicator on entry form | `src/components/PasswordStrength.tsx` | 2.8 | Low |
-| 3.7 | Confirmation dialog for destructive actions (delete, overwrite) | `src/components/ConfirmDialog.tsx` | 2.8 | Low |
-| 3.8 | Accessibility: keyboard-only navigation, ARIA labels | All UI components | 1.x | Low |
-
-**Phase 3 Acceptance Criteria**:
-- [ ] All error states show user-friendly messages (no panics, no raw errors)
-- [ ] Can import entries from CSV
-- [ ] Can export encrypted backup of all entries
-- [ ] Duplicate names trigger a warning
-- [ ] Delete requires confirmation
-- [ ] Full keyboard navigation without mouse
-
----
-
-### Phase 4: Optimization — Performance, Customization, Monitoring
-
-> Goal: Speed and polish for daily use.
-
-| Step | Action | Files | Dependencies | Risk |
-|------|--------|-------|-------------|------|
-| 4.1 | Hotkey customization in settings | `src-tauri/src/hotkey.rs`, `src/components/Settings.tsx` | 1.3 | Medium — OS-specific quirks |
-| 4.2 | Search performance: benchmark with 1000+ entries, optimize FTS5 ranking | `src-tauri/src/db/queries.rs` | 1.5 | Low |
-| 4.3 | Window animation: fade-in/out on show/hide | `src/App.tsx`, CSS | 1.2 | Low |
-| 4.4 | Clipboard auto-clear: clear password from clipboard after 30s | `src-tauri/src/commands/clipboard.rs` | 1.6 | Medium — OS clipboard API limits |
-| 4.5 | Dark/light theme support | CSS variables, `src/App.tsx` | 1.4 | Low |
-| 4.6 | App auto-start on login (optional setting) | `src-tauri/tauri.conf.json`, `src/components/Settings.tsx` | 1.1 | Medium — OS-specific |
-| 4.7 | Crash reporting / error logging to local file | `src-tauri/src/main.rs` | 3.1 | Low |
-
-**Phase 4 Acceptance Criteria**:
-- [ ] User can change the global hotkey
-- [ ] Search responds within 50ms for 1000 entries
-- [ ] Password is automatically cleared from clipboard after 30 seconds
-- [ ] UI supports dark and light themes
-- [ ] Optional auto-start on login
-
----
-
-## 5. Risk Assessment | 风险评估
-
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|-----------|------------|
-| **macOS Accessibility permissions** for global hotkey | High — hotkey won't register | Medium | Prompt user to grant permission; provide fallback tray icon to open panel |
-| **Windows hotkey conflicts** with other apps | Medium — hotkey may not register | Medium | Allow hotkey customization; detect registration failure and notify user |
-| **Encryption key in memory** could be swapped to disk | High — key exposed in swap file | Low | Use `mlock` (Unix) / `VirtualLock` (Windows) to prevent paging; zeroize on lock |
-| **SQLite corruption** from crash during write | Medium — data loss | Low | Use WAL mode; periodic backup in Phase 3 export; transactional writes |
-| **Clipboard security** — other apps can read clipboard | Medium — password exposed briefly | Medium | Auto-clear clipboard after 30s (Phase 4); document risk to user |
-| **Cross-platform UI differences** — font rendering, window behavior | Low — visual inconsistencies | Medium | Test on both platforms; use CSS normalisation; frameless window minimises OS chrome |
-| **Argon2id performance** on low-end hardware | Low — slow unlock | Low | Use conservative parameters (m=65536, t=3, p=2); benchmark on target hardware in Phase 2 |
-
----
-
-## 6. Success Criteria | 成功标准
-
-### Phase 1 Checklist
-- [ ] App launches on macOS and Windows
-- [ ] `Cmd/Ctrl+Shift+P` toggles search panel globally
-- [ ] Fuzzy search returns results within 100ms for 100 entries
-- [ ] Selecting a result copies password to clipboard
-- [ ] Panel hides on blur or Escape
-
-### Phase 2 Checklist
-- [ ] Passwords are AES-256-GCM encrypted at rest
-- [ ] Master password is required on launch
-- [ ] Password preview shows `Ab******` format (first 2 chars visible)
-- [ ] Full password only copied to clipboard, never displayed
-- [ ] Auto-lock after 5 minutes of inactivity
-- [ ] Add/edit/delete entries through UI
-
-### Phase 3 Checklist
-- [ ] No unhandled errors or panics in normal use
-- [ ] CSV import works with common formats
-- [ ] Encrypted JSON export/restore works
-- [ ] Full keyboard navigation
-- [ ] Confirmation required for destructive actions
-
-### Phase 4 Checklist
-- [ ] Custom hotkey registration works on both platforms
-- [ ] Search under 50ms for 1000+ entries
-- [ ] Clipboard auto-clears after 30 seconds
-- [ ] Dark and light themes available
-- [ ] Optional auto-start on login
+- Windows 托盘、窗口行为、全局快捷键需要在 Windows 真机或虚拟机中验收。
+- Windows 开机启动暂未实现为完整设置项。
+- 剪贴板自动清理本轮明确不做。
+- 目前只支持导入加密 JSON，CSV/TXT 仅导出。
+- 后续如果要做多端同步，应优先设计端到端加密的变更日志同步，不建议直接同步 SQLite 数据库文件。

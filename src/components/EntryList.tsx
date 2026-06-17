@@ -6,9 +6,18 @@ interface EntryListProps {
   highlightedIndex: number;
   enterCopyIndex: number;
   onCopyHandled: () => void;
+  onEdit: (entry: EntrySearchResult) => void;
+  onDelete: (entry: EntrySearchResult) => void;
 }
 
-export function EntryList({ entries, highlightedIndex, enterCopyIndex, onCopyHandled }: EntryListProps) {
+export function EntryList({
+  entries,
+  highlightedIndex,
+  enterCopyIndex,
+  onCopyHandled,
+  onEdit,
+  onDelete,
+}: EntryListProps) {
   if (entries.length === 0) {
     return (
       <div class="entry-list__empty">
@@ -26,6 +35,8 @@ export function EntryList({ entries, highlightedIndex, enterCopyIndex, onCopyHan
           isHighlighted={index === highlightedIndex}
           shouldCopy={index === enterCopyIndex}
           onCopied={onCopyHandled}
+          onEdit={onEdit}
+          onDelete={onDelete}
         />
       ))}
     </div>

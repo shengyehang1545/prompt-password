@@ -128,21 +128,51 @@ pub fn get_entry(conn: &Connection, id: &str) -> Result<Entry> {
         "SELECT id, name, url, description, alias, account, password_enc, password_nonce, tags, created_at, updated_at
          FROM entries WHERE id = ?1",
         params![id],
-        |row| {
-            Ok(Entry {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                url: row.get(2)?,
-                description: row.get(3)?,
-                alias: row.get(4)?,
-                account: row.get(5)?,
-                password_enc: row.get(6)?,
-                password_nonce: row.get(7)?,
-                tags: row.get(8)?,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
-            })
-        },
+        map_entry,
+    )
+}
+
+pub fn all_entries(conn: &Connection) -> Result<Vec<Entry>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, url, description, alias, account, password_enc, password_nonce, tags, created_at, updated_at
+         FROM entries
+         ORDER BY created_at ASC, rowid ASC",
+    )?;
+    let entries = stmt.query_map([], map_entry)?.collect();
+    entries
+}
+
+fn map_entry(row: &rusqlite::Row<'_>) -> Result<Entry> {
+    Ok(Entry {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        url: row.get(2)?,
+        description: row.get(3)?,
+        alias: row.get(4)?,
+        account: row.get(5)?,
+        password_enc: row.get(6)?,
+        password_nonce: row.get(7)?,
+        tags: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+    })
+}
+
+pub fn entry_exists_by_id_or_name(conn: &Connection, id: &str, name: &str) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT count(*) FROM entries WHERE id = ?1 OR name = ?2",
+        params![id, name],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+pub fn get_entry_search_result(conn: &Connection, id: &str) -> Result<EntrySearchResult> {
+    conn.query_row(
+        "SELECT id, name, url, description, alias, account, tags
+         FROM entries WHERE id = ?1",
+        params![id],
+        map_entry_search_result,
     )
 }
 
@@ -231,6 +261,90 @@ pub fn update_entry_secret(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn update_entry_metadata(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    url: &str,
+    description: &str,
+    alias: &str,
+    account: &str,
+    tags: &str,
+) -> Result<EntrySearchResult> {
+    let changed = conn.execute(
+        "UPDATE entries
+         SET name = ?1,
+             url = ?2,
+             description = ?3,
+             alias = ?4,
+             account = ?5,
+             tags = ?6,
+             updated_at = datetime('now')
+         WHERE id = ?7",
+        params![name, url, description, alias, account, tags, id],
+    )?;
+
+    if changed == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+
+    get_entry_search_result(conn, id)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn update_entry_metadata_and_secret(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    url: &str,
+    description: &str,
+    alias: &str,
+    account: &str,
+    password_enc: &str,
+    password_nonce: &str,
+    tags: &str,
+) -> Result<EntrySearchResult> {
+    let changed = conn.execute(
+        "UPDATE entries
+         SET name = ?1,
+             url = ?2,
+             description = ?3,
+             alias = ?4,
+             account = ?5,
+             password_enc = ?6,
+             password_nonce = ?7,
+             tags = ?8,
+             updated_at = datetime('now')
+         WHERE id = ?9",
+        params![
+            name,
+            url,
+            description,
+            alias,
+            account,
+            password_enc,
+            password_nonce,
+            tags,
+            id
+        ],
+    )?;
+
+    if changed == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+
+    get_entry_search_result(conn, id)
+}
+
+pub fn delete_entry(conn: &Connection, id: &str) -> Result<()> {
+    let changed = conn.execute("DELETE FROM entries WHERE id = ?1", params![id])?;
+    if changed == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub fn insert_password_template(
     conn: &Connection,
@@ -264,17 +378,54 @@ pub fn get_password_template(conn: &Connection, id: &str) -> Result<PasswordTemp
         "SELECT id, name, description, password_enc, password_nonce, created_at, updated_at
          FROM password_templates WHERE id = ?1",
         params![id],
-        |row| {
-            Ok(PasswordTemplate {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2)?,
-                password_enc: row.get(3)?,
-                password_nonce: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
-            })
-        },
+        map_password_template,
+    )
+}
+
+pub fn all_password_templates(conn: &Connection) -> Result<Vec<PasswordTemplate>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, password_enc, password_nonce, created_at, updated_at
+         FROM password_templates
+         ORDER BY created_at ASC, rowid ASC",
+    )?;
+    let templates = stmt.query_map([], map_password_template)?.collect();
+    templates
+}
+
+fn map_password_template(row: &rusqlite::Row<'_>) -> Result<PasswordTemplate> {
+    Ok(PasswordTemplate {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        description: row.get(2)?,
+        password_enc: row.get(3)?,
+        password_nonce: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+pub fn password_template_exists_by_id_or_name(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT count(*) FROM password_templates WHERE id = ?1 OR name = ?2",
+        params![id, name],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+pub fn get_password_template_search_result(
+    conn: &Connection,
+    id: &str,
+) -> Result<PasswordTemplateSearchResult> {
+    conn.query_row(
+        "SELECT id, name, description
+         FROM password_templates WHERE id = ?1",
+        params![id],
+        map_template_search_result,
     )
 }
 
@@ -324,6 +475,62 @@ fn map_template_search_result(row: &rusqlite::Row<'_>) -> Result<PasswordTemplat
     })
 }
 
+pub fn update_password_template_metadata(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    description: &str,
+) -> Result<PasswordTemplateSearchResult> {
+    let changed = conn.execute(
+        "UPDATE password_templates
+         SET name = ?1,
+             description = ?2,
+             updated_at = datetime('now')
+         WHERE id = ?3",
+        params![name, description, id],
+    )?;
+
+    if changed == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+
+    get_password_template_search_result(conn, id)
+}
+
+pub fn update_password_template_metadata_and_secret(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    description: &str,
+    password_enc: &str,
+    password_nonce: &str,
+) -> Result<PasswordTemplateSearchResult> {
+    let changed = conn.execute(
+        "UPDATE password_templates
+         SET name = ?1,
+             description = ?2,
+             password_enc = ?3,
+             password_nonce = ?4,
+             updated_at = datetime('now')
+         WHERE id = ?5",
+        params![name, description, password_enc, password_nonce, id],
+    )?;
+
+    if changed == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+
+    get_password_template_search_result(conn, id)
+}
+
+pub fn delete_password_template(conn: &Connection, id: &str) -> Result<()> {
+    let changed = conn.execute("DELETE FROM password_templates WHERE id = ?1", params![id])?;
+    if changed == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
 pub fn get_vault_meta(conn: &Connection) -> Result<Option<VaultMeta>> {
     conn.query_row(
         "SELECT salt_b64, verifier_enc, verifier_nonce FROM vault_meta WHERE id = 1",
@@ -354,6 +561,27 @@ pub fn store_vault_meta(
              verifier_nonce = excluded.verifier_nonce,
              updated_at = datetime('now')",
         params![salt_b64, verifier_enc, verifier_nonce],
+    )?;
+    Ok(())
+}
+
+pub fn get_app_setting(conn: &Connection, key: &str) -> Result<Option<String>> {
+    conn.query_row(
+        "SELECT value FROM app_settings WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+}
+
+pub fn set_app_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO app_settings (key, value)
+         VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET
+             value = excluded.value,
+             updated_at = datetime('now')",
+        params![key, value],
     )?;
     Ok(())
 }
@@ -494,5 +722,225 @@ mod tests {
         assert_eq!(results[0].name, "Birthday");
         assert_eq!(results[0].description, "yyyymmdd");
         assert_eq!(results[0].password_preview, "********");
+    }
+
+    #[test]
+    fn update_password_template_metadata_preserves_secret_material() {
+        let conn = test_conn();
+        let template = insert_password_template(
+            &conn,
+            "Birthday",
+            "yyyymmdd",
+            "template-ciphertext",
+            "template-nonce",
+        )
+        .unwrap();
+
+        let updated =
+            update_password_template_metadata(&conn, &template.id, "PIN", "last four digits")
+                .unwrap();
+
+        assert_eq!(updated.id, template.id);
+        assert_eq!(updated.name, "PIN");
+        assert_eq!(updated.description, "last four digits");
+        assert_eq!(updated.password_preview, "********");
+
+        let persisted = get_password_template(&conn, &template.id).unwrap();
+        assert_eq!(persisted.password_enc, "template-ciphertext");
+        assert_eq!(persisted.password_nonce, "template-nonce");
+    }
+
+    #[test]
+    fn update_password_template_metadata_and_secret_only_changes_template() {
+        let conn = test_conn();
+        let entry = insert_entry(
+            &conn,
+            "GitHub",
+            "",
+            "",
+            "",
+            "octocat",
+            "entry-ciphertext",
+            "entry-nonce",
+            "dev",
+        )
+        .unwrap();
+        let template = insert_password_template(
+            &conn,
+            "Birthday",
+            "yyyymmdd",
+            "old-template-ciphertext",
+            "old-template-nonce",
+        )
+        .unwrap();
+
+        let updated = update_password_template_metadata_and_secret(
+            &conn,
+            &template.id,
+            "PIN",
+            "last four digits",
+            "new-template-ciphertext",
+            "new-template-nonce",
+        )
+        .unwrap();
+
+        assert_eq!(updated.name, "PIN");
+        let persisted_template = get_password_template(&conn, &template.id).unwrap();
+        assert_eq!(persisted_template.password_enc, "new-template-ciphertext");
+        assert_eq!(persisted_template.password_nonce, "new-template-nonce");
+
+        let persisted_entry = get_entry(&conn, &entry.id).unwrap();
+        assert_eq!(persisted_entry.password_enc, "entry-ciphertext");
+        assert_eq!(persisted_entry.password_nonce, "entry-nonce");
+    }
+
+    #[test]
+    fn delete_password_template_does_not_delete_existing_entries() {
+        let conn = test_conn();
+        let entry = insert_entry(
+            &conn,
+            "GitHub",
+            "",
+            "",
+            "",
+            "octocat",
+            "entry-ciphertext",
+            "entry-nonce",
+            "dev",
+        )
+        .unwrap();
+        let template = insert_password_template(
+            &conn,
+            "Birthday",
+            "yyyymmdd",
+            "template-ciphertext",
+            "template-nonce",
+        )
+        .unwrap();
+
+        delete_password_template(&conn, &template.id).unwrap();
+
+        assert!(get_password_template(&conn, &template.id).is_err());
+        let results = search_entries(&conn, "GitHub").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, entry.id);
+    }
+
+    #[test]
+    fn app_settings_round_trip_values() {
+        let conn = test_conn();
+
+        assert_eq!(get_app_setting(&conn, "hotkey").unwrap(), None);
+
+        set_app_setting(&conn, "hotkey", "Cmd+Option+P").unwrap();
+        set_app_setting(&conn, "auto_start_enabled", "true").unwrap();
+
+        assert_eq!(
+            get_app_setting(&conn, "hotkey").unwrap(),
+            Some("Cmd+Option+P".to_string())
+        );
+        assert_eq!(
+            get_app_setting(&conn, "auto_start_enabled").unwrap(),
+            Some("true".to_string())
+        );
+    }
+
+    #[test]
+    fn update_entry_metadata_changes_search_fields_without_secret_material() {
+        let conn = test_conn();
+        let entry = insert_entry(
+            &conn,
+            "GitHub",
+            "https://github.com",
+            "Developer account",
+            "work login",
+            "octocat",
+            "ciphertext-secret-123",
+            "nonce-secret-123",
+            "dev,code",
+        )
+        .unwrap();
+
+        let updated = update_entry_metadata(
+            &conn,
+            &entry.id,
+            "GitLab",
+            "https://gitlab.com",
+            "Source control",
+            "team login",
+            "engineer@example.com",
+            "work,source",
+        )
+        .unwrap();
+
+        assert_eq!(updated.id, entry.id);
+        assert_eq!(updated.name, "GitLab");
+        assert_eq!(updated.url, "https://gitlab.com");
+        assert_eq!(updated.account, "engineer@example.com");
+        assert_eq!(updated.password_preview, "********");
+
+        let persisted = get_entry(&conn, &entry.id).unwrap();
+        assert_eq!(persisted.password_enc, "ciphertext-secret-123");
+        assert_eq!(persisted.password_nonce, "nonce-secret-123");
+    }
+
+    #[test]
+    fn update_entry_metadata_and_secret_replaces_secret_material() {
+        let conn = test_conn();
+        let entry = insert_entry(
+            &conn,
+            "GitHub",
+            "",
+            "",
+            "",
+            "octocat",
+            "old-ciphertext",
+            "old-nonce",
+            "",
+        )
+        .unwrap();
+
+        let updated = update_entry_metadata_and_secret(
+            &conn,
+            &entry.id,
+            "GitHub",
+            "",
+            "",
+            "",
+            "octocat",
+            "new-ciphertext",
+            "new-nonce",
+            "dev",
+        )
+        .unwrap();
+
+        assert_eq!(updated.password_preview, "********");
+        let persisted = get_entry(&conn, &entry.id).unwrap();
+        assert_eq!(persisted.password_enc, "new-ciphertext");
+        assert_eq!(persisted.password_nonce, "new-nonce");
+        assert_eq!(persisted.tags, "dev");
+    }
+
+    #[test]
+    fn delete_entry_removes_entry_from_search_results() {
+        let conn = test_conn();
+        let entry = insert_entry(
+            &conn,
+            "Disposable",
+            "",
+            "",
+            "",
+            "",
+            "ciphertext",
+            "nonce",
+            "",
+        )
+        .unwrap();
+
+        delete_entry(&conn, &entry.id).unwrap();
+
+        let results = search_entries(&conn, "Disposable").unwrap();
+        assert!(results.is_empty());
+        assert!(get_entry(&conn, &entry.id).is_err());
     }
 }

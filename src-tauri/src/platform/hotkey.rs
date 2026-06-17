@@ -1,5 +1,3 @@
-use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShortcutProfile {
     Macos,
@@ -14,19 +12,8 @@ pub struct HotkeySpec {
 impl HotkeySpec {
     pub fn label(self) -> &'static str {
         match self.profile {
-            ShortcutProfile::Macos => "Cmd+Shift+P",
-            ShortcutProfile::WindowsCompatible => "Ctrl+Shift+P",
-        }
-    }
-
-    pub fn to_tauri_shortcut(self) -> Shortcut {
-        match self.profile {
-            ShortcutProfile::Macos => {
-                Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyP)
-            }
-            ShortcutProfile::WindowsCompatible => {
-                Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP)
-            }
+            ShortcutProfile::Macos => "Cmd+Shift+K",
+            ShortcutProfile::WindowsCompatible => "Ctrl+Shift+K",
         }
     }
 }
@@ -52,16 +39,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn macos_profile_uses_command_shift_p() {
+    fn macos_profile_uses_command_shift_k() {
         let spec = hotkey_for_profile(ShortcutProfile::Macos);
 
-        assert_eq!(spec.label(), "Cmd+Shift+P");
+        assert_eq!(spec.label(), "Cmd+Shift+K");
     }
 
     #[test]
-    fn windows_compatible_profile_uses_control_shift_p() {
+    fn windows_compatible_profile_uses_control_shift_k() {
         let spec = hotkey_for_profile(ShortcutProfile::WindowsCompatible);
 
-        assert_eq!(spec.label(), "Ctrl+Shift+P");
+        assert_eq!(spec.label(), "Ctrl+Shift+K");
     }
 }

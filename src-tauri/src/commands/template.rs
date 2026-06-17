@@ -2,7 +2,6 @@ use std::sync::Mutex;
 
 use rusqlite::Connection;
 use tauri::State;
-use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use crate::core::vault::{template_aad, VaultSession};
 use crate::crypto;
@@ -82,9 +81,87 @@ pub fn create_password_template(
 }
 
 #[tauri::command]
+pub fn update_password_template(
+    id: String,
+    name: String,
+    description: Option<String>,
+    password: Option<String>,
+    conn: State<'_, Mutex<Connection>>,
+    vault: State<'_, Mutex<VaultSession>>,
+) -> Result<PasswordTemplateSearchResult, String> {
+    if id.trim().is_empty() {
+        return Err("template id is required".to_string());
+    }
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("template name is required".to_string());
+    }
+    let description = description.unwrap_or_default().trim().to_string();
+    let password = password.unwrap_or_default();
+
+    let sealed = if password.is_empty() {
+        None
+    } else {
+        let vault = vault
+            .lock()
+            .map_err(|e| format!("Failed to access vault: {}", e))?;
+        Some(crypto::encrypt_secret(
+            vault.key()?,
+            &template_aad(&id),
+            &password,
+        )?)
+    };
+
+    if sealed.is_none() {
+        let vault = vault
+            .lock()
+            .map_err(|e| format!("Failed to access vault: {}", e))?;
+        vault.key()?;
+    }
+
+    let db = conn
+        .lock()
+        .map_err(|e| format!("Failed to access database: {}", e))?;
+
+    match sealed {
+        Some(sealed) => queries::update_password_template_metadata_and_secret(
+            &db,
+            &id,
+            &name,
+            &description,
+            &sealed.ciphertext_b64,
+            &sealed.nonce_b64,
+        ),
+        None => queries::update_password_template_metadata(&db, &id, &name, &description),
+    }
+    .map_err(|e| format!("Failed to update password template {}: {}", id, e))
+}
+
+#[tauri::command]
+pub fn delete_password_template(
+    id: String,
+    conn: State<'_, Mutex<Connection>>,
+    vault: State<'_, Mutex<VaultSession>>,
+) -> Result<(), String> {
+    if id.trim().is_empty() {
+        return Err("template id is required".to_string());
+    }
+    {
+        let vault = vault
+            .lock()
+            .map_err(|e| format!("Failed to access vault: {}", e))?;
+        vault.key()?;
+    }
+    let db = conn
+        .lock()
+        .map_err(|e| format!("Failed to access database: {}", e))?;
+    queries::delete_password_template(&db, &id)
+        .map_err(|e| format!("Failed to delete password template {}: {}", id, e))
+}
+
+#[tauri::command]
 pub fn use_password_template(
     id: String,
-    app: tauri::AppHandle,
     conn: State<'_, Mutex<Connection>>,
     vault: State<'_, Mutex<VaultSession>>,
 ) -> Result<UsedPasswordTemplate, String> {
@@ -106,10 +183,6 @@ pub fn use_password_template(
             &template.password_nonce,
         )?
     };
-
-    app.clipboard()
-        .write_text(password.clone())
-        .map_err(|e| format!("Failed to copy template password to clipboard: {}", e))?;
 
     Ok(UsedPasswordTemplate { password })
 }
