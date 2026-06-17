@@ -4,6 +4,7 @@ pub struct NormalizedEntryInput {
     pub url: String,
     pub description: String,
     pub alias: String,
+    pub account: String,
     pub password: String,
     pub tags: String,
 }
@@ -13,6 +14,7 @@ pub fn normalize_create_entry(
     url: Option<String>,
     description: Option<String>,
     alias: Option<String>,
+    account: Option<String>,
     password: String,
     tags: Option<String>,
 ) -> Result<NormalizedEntryInput, String> {
@@ -30,6 +32,7 @@ pub fn normalize_create_entry(
         url: trim_optional(url),
         description: trim_optional(description),
         alias: trim_optional(alias),
+        account: trim_optional(account),
         password,
         tags: trim_optional(tags),
     })
@@ -50,6 +53,7 @@ mod tests {
             Some("https://example.com".to_string()),
             None,
             None,
+            None,
             "secret".to_string(),
             None,
         );
@@ -61,6 +65,7 @@ mod tests {
     fn normalize_create_entry_rejects_empty_password() {
         let result = normalize_create_entry(
             "Example".to_string(),
+            None,
             None,
             None,
             None,
@@ -78,6 +83,7 @@ mod tests {
             Some("  https://github.com  ".to_string()),
             Some("  Developer account  ".to_string()),
             Some("  work login  ".to_string()),
+            Some("  octocat  ".to_string()),
             "  secret  ".to_string(),
             Some("  dev,code  ".to_string()),
         )
@@ -87,6 +93,7 @@ mod tests {
         assert_eq!(input.url, "https://github.com");
         assert_eq!(input.description, "Developer account");
         assert_eq!(input.alias, "work login");
+        assert_eq!(input.account, "octocat");
         assert_eq!(input.password, "  secret  ");
         assert_eq!(input.tags, "dev,code");
     }

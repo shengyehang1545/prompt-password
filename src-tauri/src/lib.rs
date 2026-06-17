@@ -4,6 +4,7 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 mod commands;
 mod core;
+mod crypto;
 mod db;
 mod platform;
 
@@ -25,6 +26,12 @@ pub fn run() {
             commands::entry::get_entry,
             commands::entry::create_entry,
             commands::clipboard::copy_to_clipboard,
+            commands::clipboard::copy_entry_password,
+            commands::vault::unlock_vault,
+            commands::vault::lock_vault,
+            commands::template::search_password_templates,
+            commands::template::create_password_template,
+            commands::template::use_password_template,
         ])
         .setup(|app| {
             let window = app
@@ -36,7 +43,11 @@ pub fn run() {
             app.global_shortcut()
                 .register(hotkey.to_tauri_shortcut())
                 .unwrap_or_else(|e| {
-                    panic!("failed to register global shortcut {}: {}", hotkey.label(), e)
+                    panic!(
+                        "failed to register global shortcut {}: {}",
+                        hotkey.label(),
+                        e
+                    )
                 });
 
             let app_data_dir = app
@@ -47,6 +58,7 @@ pub fn run() {
             let db_path = app_data_dir.join("prompt-password.db");
             let conn = db::init::initialize(&db_path).expect("failed to initialize database");
             app.manage(Mutex::new(conn));
+            app.manage(Mutex::new(core::vault::VaultSession::default()));
 
             Ok(())
         })

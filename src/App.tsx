@@ -4,6 +4,7 @@ import { useSearch } from "./hooks/useSearch";
 import { SearchInput } from "./components/SearchInput";
 import { EntryList } from "./components/EntryList";
 import { AddEntryForm } from "./components/AddEntryForm";
+import { UnlockScreen } from "./components/UnlockScreen";
 import "./App.css";
 import "./components/SearchInput.css";
 import "./components/EntryItem.css";
@@ -15,6 +16,7 @@ export function App() {
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [enterCopyIndex, setEnterCopyIndex] = useState(-1);
   const [showForm, setShowForm] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
 
   const handleInput = useCallback((value: string) => {
     setQuery(value);
@@ -63,6 +65,10 @@ export function App() {
     setShowForm(false);
     refresh();
   }, [refresh]);
+
+  if (!unlocked) {
+    return <UnlockScreen onUnlocked={() => setUnlocked(true)} />;
+  }
 
   return (
     <div class="app">

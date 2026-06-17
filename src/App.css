@@ -70,3 +70,40 @@ body {
   color: var(--failed-text);
   flex: 1;
 }
+
+.unlock-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 18px;
+}
+
+.unlock-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(360px, 100%);
+}
+
+.unlock-header {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.unlock-title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.unlock-subtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.unlock-submit {
+  width: 100%;
+}

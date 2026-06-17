@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "preact/hooks";
-import { copyToClipboard } from "../lib/tauri";
+import { copyEntryPassword } from "../lib/tauri";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -7,11 +7,11 @@ export function useClipboard() {
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const copy = useCallback(async (text: string) => {
+  const copy = useCallback(async (id: string) => {
     if (timerRef.current) clearTimeout(timerRef.current);
 
     try {
-      await copyToClipboard(text);
+      await copyEntryPassword(id);
       setCopyState("copied");
     } catch {
       setCopyState("failed");

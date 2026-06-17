@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "preact/hooks";
-import { createEntry, searchEntries, type EntrySearchResult } from "../lib/tauri";
+import {
+  createEntry,
+  createPasswordTemplate,
+  searchEntries,
+  searchPasswordTemplates,
+  usePasswordTemplate,
+  type PasswordTemplateSearchResult,
+} from "../lib/tauri";
 
 interface AddEntryFormProps {
   onSuccess: () => void;
@@ -9,6 +16,7 @@ interface AddEntryFormProps {
 export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -16,9 +24,14 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
 
   // Template search
   const [templateQuery, setTemplateQuery] = useState("");
-  const [templateResults, setTemplateResults] = useState<EntrySearchResult[]>([]);
+  const [templateResults, setTemplateResults] = useState<PasswordTemplateSearchResult[]>([]);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [showTemplateCreate, setShowTemplateCreate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [templatePassword, setTemplatePassword] = useState("");
+  const [templateSubmitting, setTemplateSubmitting] = useState(false);
   const templateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const templateRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +116,7 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
 
     templateTimerRef.current = setTimeout(async () => {
       try {
-        const results = await searchEntries(trimmed);
+        const results = await searchPasswordTemplates(trimmed);
         setTemplateResults(results);
         setTemplateOpen(results.length > 0);
       } catch {
@@ -132,11 +145,50 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
     searchTemplates(value);
   };
 
-  const handleSelectTemplate = (entry: EntrySearchResult) => {
+  const handleSelectTemplate = async (entry: PasswordTemplateSearchResult) => {
     setTemplateQuery(entry.name);
     setSelectedTemplateId(entry.id);
-    setPassword(entry.password_enc);
     setTemplateOpen(false);
+    setError(null);
+
+    try {
+      const usedTemplate = await usePasswordTemplate(entry.id);
+      setPassword(usedTemplate.password);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const handleCreateTemplate = async () => {
+    const trimmedName = templateName.trim();
+    if (!trimmedName) {
+      setError("Template name is required.");
+      return;
+    }
+    if (!templatePassword) {
+      setError("Template password is required.");
+      return;
+    }
+
+    setTemplateSubmitting(true);
+    setError(null);
+    try {
+      const created = await createPasswordTemplate({
+        name: trimmedName,
+        description: templateDescription.trim() || undefined,
+        password: templatePassword,
+      });
+      setTemplateResults([created]);
+      setShowTemplateCreate(false);
+      setTemplateName("");
+      setTemplateDescription("");
+      setTemplatePassword("");
+      await handleSelectTemplate(created);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setTemplateSubmitting(false);
+    }
   };
 
   const handleAddTag = (tag: string) => {
@@ -182,6 +234,7 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
       await createEntry({
         name: trimmedName,
         url: url.trim() || undefined,
+        account: account.trim() || undefined,
         password,
         tags: selectedTags.length > 0 ? selectedTags.join(",") : undefined,
       });
@@ -235,6 +288,19 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
               value={url}
               onInput={(e) => setUrl((e.target as HTMLInputElement).value)}
               placeholder="e.g. https://github.com"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="ae-account">Account</label>
+            <input
+              id="ae-account"
+              class="form-input"
+              type="text"
+              value={account}
+              onInput={(e) => setAccount((e.target as HTMLInputElement).value)}
+              placeholder="e.g. octocat@example.com"
               autocomplete="off"
             />
           </div>
@@ -298,7 +364,16 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
           </div>
 
           <div class="form-field" ref={templateRef}>
-            <label class="form-label" for="ae-template">Password Template</label>
+            <div class="form-label-row">
+              <label class="form-label" for="ae-template">Password Template</label>
+              <button
+                type="button"
+                class="inline-action-btn"
+                onClick={() => setShowTemplateCreate((value) => !value)}
+              >
+                {showTemplateCreate ? "Cancel" : "New"}
+              </button>
+            </div>
             <input
               id="ae-template"
               class="form-input"
@@ -306,7 +381,7 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
               value={templateQuery}
               onInput={(e) => handleTemplateInput((e.target as HTMLInputElement).value)}
               onFocus={() => { if (templateResults.length > 0) setTemplateOpen(true); }}
-              placeholder="Search existing entries..."
+              placeholder="Search templates..."
               autocomplete="off"
             />
             {templateOpen && templateResults.length > 0 && (
@@ -319,9 +394,45 @@ export function AddEntryForm({ onSuccess, onClose }: AddEntryFormProps) {
                     onClick={() => handleSelectTemplate(entry)}
                   >
                     <span class="template-item-name">{entry.name}</span>
-                    <span class="template-item-pass">{entry.password_enc.slice(0, 2)}•••</span>
+                    <span class="template-item-pass">{entry.password_preview}</span>
                   </button>
                 ))}
+              </div>
+            )}
+            {showTemplateCreate && (
+              <div class="template-create-panel">
+                <input
+                  class="form-input"
+                  type="text"
+                  value={templateName}
+                  onInput={(e) => setTemplateName((e.target as HTMLInputElement).value)}
+                  placeholder="Template name"
+                  autocomplete="off"
+                />
+                <input
+                  class="form-input"
+                  type="text"
+                  value={templateDescription}
+                  onInput={(e) => setTemplateDescription((e.target as HTMLInputElement).value)}
+                  placeholder="Description"
+                  autocomplete="off"
+                />
+                <input
+                  class="form-input"
+                  type="password"
+                  value={templatePassword}
+                  onInput={(e) => setTemplatePassword((e.target as HTMLInputElement).value)}
+                  placeholder="Template password"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  class="btn btn-save template-create-save"
+                  onClick={handleCreateTemplate}
+                  disabled={templateSubmitting}
+                >
+                  {templateSubmitting ? "Saving..." : "Save Template"}
+                </button>
               </div>
             )}
           </div>
