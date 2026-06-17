@@ -104,6 +104,13 @@ body {
   font-size: 13px;
 }
 
+.unlock-help {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .unlock-submit {
   width: 100%;
 }

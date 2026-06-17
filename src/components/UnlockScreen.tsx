@@ -40,8 +40,12 @@ export function UnlockScreen({ onUnlocked }: UnlockScreenProps) {
       <form class="unlock-panel" onSubmit={handleSubmit}>
         <div class="unlock-header">
           <h1 class="unlock-title">Prompt Password</h1>
-          <span class="unlock-subtitle">Vault locked</span>
+          <span class="unlock-subtitle">Unlock or create your local vault</span>
         </div>
+        <p class="unlock-help">
+          First launch: enter a new master password. Later, use the same password
+          to unlock this vault.
+        </p>
         <div class="form-field">
           <label class="form-label" for="unlock-master-password">
             Master Password
@@ -58,7 +62,7 @@ export function UnlockScreen({ onUnlocked }: UnlockScreenProps) {
         </div>
         {error && <div class="form-error">{error}</div>}
         <button type="submit" class="btn btn-save unlock-submit" disabled={submitting}>
-          {submitting ? "Unlocking..." : "Unlock"}
+          {submitting ? "Unlocking..." : "Unlock / Create Vault"}
         </button>
       </form>
     </div>
