@@ -41,8 +41,13 @@ fn show_window(window: &WebviewWindow) {
     let _ = window.show();
     let _ = window.set_focus();
     #[cfg(target_os = "macos")]
-    activate_macos_window(window);
-    let _ = window.emit(PANEL_SHOWN_EVENT, ());
+    {
+        activate_macos_window(window);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.emit(PANEL_SHOWN_EVENT, ());
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -75,6 +80,7 @@ fn activate_macos_window(window: &WebviewWindow) {
         app.activateIgnoringOtherApps(true);
         ns_window.makeKeyAndOrderFront(None);
         ns_window.orderFrontRegardless();
+        let _ = native_window.emit(PANEL_SHOWN_EVENT, ());
     });
 }
 
