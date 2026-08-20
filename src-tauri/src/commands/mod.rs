@@ -6,3 +6,4 @@ pub mod search;
 pub mod settings;
 pub mod template;
 pub mod vault;
+pub mod window;

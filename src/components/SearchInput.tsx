@@ -1,6 +1,5 @@
 import { useRef, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { inputGuards } from "../lib/inputGuards";
 
 interface SearchInputProps {
@@ -8,22 +7,20 @@ interface SearchInputProps {
   onInput: (value: string) => void;
   onKeyDown?: (e: KeyboardEvent) => void;
   loading?: boolean;
+  focusRequest: number;
   children?: ComponentChildren;
 }
 
-export function SearchInput({ value, onInput, onKeyDown, loading, children }: SearchInputProps) {
+export function SearchInput({ value, onInput, onKeyDown, loading, focusRequest, children }: SearchInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-
-    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused) inputRef.current?.focus();
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
     });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequest]);
 
   return (
     <div class="search-input-wrapper">

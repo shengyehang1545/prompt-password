@@ -5,6 +5,7 @@ import {
   exportVaultBackup,
   getAppSettings,
   importVaultBackup,
+  hideMainWindow,
   lockVault,
   setAutoStartEnabled,
   setGlobalHotkey,
@@ -26,7 +27,7 @@ import "./components/EntryList.css";
 import "./components/AddEntryForm.css";
 
 export function App() {
-  const { query, setQuery, results, loading, error, refresh } = useSearch();
+  const { query, setQuery, results, loading, error, refresh, reset } = useSearch();
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [enterCopyIndex, setEnterCopyIndex] = useState(-1);
   const [showForm, setShowForm] = useState(false);
@@ -42,7 +43,44 @@ export function App() {
   const [securePassword, setSecurePassword] = useState("");
   const [secureSubmitting, setSecureSubmitting] = useState(false);
   const [secureError, setSecureError] = useState<string | null>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const showFormRef = useRef(false);
+
+  useEffect(() => {
+    showFormRef.current = showForm;
+  }, [showForm]);
+
+  const handlePanelLifecycle = useCallback((focusSearch: boolean) => {
+    setHighlightedIndex(-1);
+    setEnterCopyIndex(-1);
+
+    if (showFormRef.current) return;
+
+    reset();
+    setShowSettings(false);
+    setSecureAction(null);
+    setSecurePassword("");
+    setSecureError(null);
+    if (focusSearch) {
+      setFocusRequest((request) => request + 1);
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    const unlistenShown = appWindow.listen("panel-shown", () => {
+      handlePanelLifecycle(true);
+    });
+    const unlistenHidden = appWindow.listen("panel-hidden", () => {
+      handlePanelLifecycle(false);
+    });
+
+    return () => {
+      unlistenShown.then((unlisten) => unlisten());
+      unlistenHidden.then((unlisten) => unlisten());
+    };
+  }, [handlePanelLifecycle]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -68,7 +106,7 @@ export function App() {
       if (results.length === 0) {
         if (e.key === "Escape") {
           e.preventDefault();
-          getCurrentWindow().hide();
+          hideMainWindow();
         }
         return;
       }
@@ -94,7 +132,7 @@ export function App() {
           break;
         case "Escape":
           e.preventDefault();
-          getCurrentWindow().hide();
+          hideMainWindow();
           break;
       }
     },
@@ -228,6 +266,7 @@ export function App() {
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         loading={loading}
+        focusRequest={focusRequest}
       >
         <input
           ref={importFileRef}
@@ -256,6 +295,17 @@ export function App() {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M6.9 2.2h2.2l.4 1.5c.3.1.6.2.9.4l1.3-.8 1.6 1.6-.8 1.3c.2.3.3.6.4.9l1.5.4v2.2l-1.5.4c-.1.3-.2.6-.4.9l.8 1.3-1.6 1.6-1.3-.8c-.3.2-.6.3-.9.4l-.4 1.5H6.9l-.4-1.5c-.3-.1-.6-.2-.9-.4l-1.3.8-1.6-1.6.8-1.3c-.2-.3-.3-.6-.4-.9l-1.5-.4V7.5l1.5-.4c.1-.3.2-.6.4-.9l-.8-1.3 1.6-1.6 1.3.8c.3-.2.6-.3.9-.4l.4-1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
             <circle cx="8" cy="8.6" r="2" stroke="currentColor" stroke-width="1.2" />
+          </svg>
+        </button>
+        <button
+          class="add-entry-btn close-panel-btn"
+          onClick={() => hideMainWindow()}
+          type="button"
+          aria-label="Hide window"
+          title="Hide"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           </svg>
         </button>
       </SearchInput>

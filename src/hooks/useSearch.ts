@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "preact/hooks";
+import { useCallback, useEffect, useState, useRef } from "preact/hooks";
 import { type EntrySearchResult, searchEntries } from "../lib/tauri";
 
 export function useSearch() {
@@ -49,5 +49,16 @@ export function useSearch() {
 
   const refresh = () => setVersion((v) => v + 1);
 
-  return { query, setQuery, results, loading, error, refresh };
+  const reset = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    timerRef.current = null;
+    setQuery("");
+    setResults([]);
+    setLoading(false);
+    setError(null);
+  }, []);
+
+  return { query, setQuery, results, loading, error, refresh, reset };
 }
