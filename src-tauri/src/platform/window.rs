@@ -11,9 +11,7 @@ pub fn configure_main_window(window: &WebviewWindow) {
     }
 
     #[cfg(target_os = "macos")]
-    {
-        let _ = window.set_visible_on_all_workspaces(true);
-    }
+    configure_macos_window(window);
 }
 
 pub fn toggle_main_window(app: &tauri::AppHandle) {
@@ -42,7 +40,51 @@ fn show_window(window: &WebviewWindow) {
     let _ = move_to_cursor_monitor(window);
     let _ = window.show();
     let _ = window.set_focus();
+    #[cfg(target_os = "macos")]
+    activate_macos_window(window);
     let _ = window.emit(PANEL_SHOWN_EVENT, ());
+}
+
+#[cfg(target_os = "macos")]
+fn configure_macos_window(window: &WebviewWindow) {
+    let native_window = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        let Ok(pointer) = native_window.ns_window() else {
+            return;
+        };
+        let ns_window: &objc2_app_kit::NSWindow = unsafe { &*pointer.cast() };
+        ns_window.setCollectionBehavior(panel_collection_behavior(ns_window.collectionBehavior()));
+        ns_window.setHidesOnDeactivate(false);
+    });
+}
+
+#[cfg(target_os = "macos")]
+fn activate_macos_window(window: &WebviewWindow) {
+    let native_window = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        let Ok(pointer) = native_window.ns_window() else {
+            return;
+        };
+        let ns_window: &objc2_app_kit::NSWindow = unsafe { &*pointer.cast() };
+        let Some(marker) = objc2::MainThreadMarker::new() else {
+            return;
+        };
+        let app = objc2_app_kit::NSApplication::sharedApplication(marker);
+        // Full-screen Spaces require unconditional activation before the panel can receive input.
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+        ns_window.makeKeyAndOrderFront(None);
+        ns_window.orderFrontRegardless();
+    });
+}
+
+#[cfg(target_os = "macos")]
+fn panel_collection_behavior(
+    current: objc2_app_kit::NSWindowCollectionBehavior,
+) -> objc2_app_kit::NSWindowCollectionBehavior {
+    (current & !objc2_app_kit::NSWindowCollectionBehavior::CanJoinAllSpaces)
+        | objc2_app_kit::NSWindowCollectionBehavior::MoveToActiveSpace
+        | objc2_app_kit::NSWindowCollectionBehavior::FullScreenAuxiliary
 }
 
 fn hide_window(window: &WebviewWindow) {
@@ -131,5 +173,19 @@ mod tests {
         assert!(!point_is_inside_rect(
             0.0, 348.0, -1920.0, -192.0, 1920.0, 1080.0
         ));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn full_screen_panel_joins_active_space_without_joining_all_spaces() {
+        let behavior = super::panel_collection_behavior(
+            objc2_app_kit::NSWindowCollectionBehavior::CanJoinAllSpaces,
+        );
+
+        assert!(behavior.contains(
+            objc2_app_kit::NSWindowCollectionBehavior::MoveToActiveSpace
+                | objc2_app_kit::NSWindowCollectionBehavior::FullScreenAuxiliary
+        ));
+        assert!(!behavior.contains(objc2_app_kit::NSWindowCollectionBehavior::CanJoinAllSpaces));
     }
 }

@@ -2659,11 +2659,13 @@ dependencies = [
 
 [[package]]
 name = "prompt-password"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aes-gcm",
  "argon2",
  "base64 0.22.1",
+ "objc2",
+ "objc2-app-kit",
  "rand_core",
  "rusqlite",
  "serde",
