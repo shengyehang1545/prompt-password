@@ -10,7 +10,7 @@ Prompt Password is a Tauri 2 desktop password manager with a Preact frontend and
 
 ## Scope
 
-This change targets macOS first. Existing non-macOS behavior must continue to compile, but Windows multi-display behavior is deferred. The database schema, encryption format, app identifier, and application data directory remain unchanged.
+This change targets macOS first, while keeping the display-placement path portable. Windows uses the same cursor and monitor lookup to show the panel on the current pointer display, but skips the macOS-only Space policy. The database schema, encryption format, app identifier, and application data directory remain unchanged.
 
 ## Window Lifecycle
 
@@ -18,7 +18,7 @@ The Rust window module owns show/hide behavior. Showing the panel performs these
 
 1. Resolve the current mouse position and select the monitor containing it.
 2. Center the panel inside that monitor's available work area.
-3. On macOS, make the panel available on the active Space and activate/focus the application window.
+3. On macOS, make the panel available on the active Space and activate/focus the application window. On Windows, keep the normal workspace behavior.
 4. Show and focus the WebView window.
 5. Emit a frontend event indicating that the panel has been shown.
 
@@ -39,7 +39,7 @@ Hiding from Escape, the explicit close button, or the shortcut follows the same 
 
 ## Components and Boundaries
 
-- `src-tauri/src/platform/window.rs`: monitor selection, window placement, macOS workspace policy, show/hide toggle, and panel-shown event emission.
+- `src-tauri/src/platform/window.rs`: cross-platform monitor selection and window placement, macOS workspace policy, show/hide toggle, and panel-shown event emission.
 - `src/App.tsx`: application-level visibility lifecycle, search reset rules, and explicit close action.
 - `src/components/SearchInput.tsx`: stable input ref behavior and reaction to a focus request signal.
 - `src/components/SearchInput.css`: close-button styling consistent with existing search actions.
