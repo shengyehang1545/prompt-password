@@ -33,6 +33,7 @@ pub fn run() {
             commands::clipboard::copy_entry_password,
             commands::vault::unlock_vault,
             commands::vault::lock_vault,
+            commands::window::hide_main_window,
             commands::settings::get_app_settings,
             commands::settings::set_auto_start_enabled,
             commands::settings::set_global_hotkey,

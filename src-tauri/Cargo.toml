@@ -1,6 +1,6 @@
 [package]
 name = "prompt-password"
-version = "0.1.0"
+version = "0.1.7"
 edition = "2021"
 
 [lib]
@@ -22,3 +22,7 @@ argon2 = "0.5"
 base64 = "0.22"
 rand_core = { version = "0.6", features = ["getrandom"] }
 zeroize = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6", default-features = false }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSWindow"] }

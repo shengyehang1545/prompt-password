@@ -83,6 +83,10 @@ export function lockVault(): Promise<void> {
   return invoke("lock_vault");
 }
 
+export function hideMainWindow(): Promise<void> {
+  return invoke("hide_main_window");
+}
+
 export function searchEntries(query: string): Promise<EntrySearchResult[]> {
   return invoke("search_entries", { query });
 }

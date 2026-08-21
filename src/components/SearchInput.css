@@ -68,6 +68,15 @@
   color: var(--accent);
 }
 
+.close-panel-btn:hover {
+  color: var(--text-primary);
+}
+
+.add-entry-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
