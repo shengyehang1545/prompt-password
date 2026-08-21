@@ -37,6 +37,9 @@ pub fn hide_main_window(app: &tauri::AppHandle) {
 }
 
 fn show_window(window: &WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    let _ = move_to_primary_monitor(window);
+    #[cfg(not(target_os = "macos"))]
     let _ = move_to_cursor_monitor(window);
     let _ = window.show();
     let _ = window.set_focus();
@@ -98,6 +101,29 @@ fn hide_window(window: &WebviewWindow) {
     let _ = window.hide();
 }
 
+#[cfg(target_os = "macos")]
+fn move_to_primary_monitor(window: &WebviewWindow) -> tauri::Result<()> {
+    let Some(monitor) = window.primary_monitor()? else {
+        return Ok(());
+    };
+
+    let work_area = monitor.work_area();
+    let window_size = window.outer_size()?;
+    let x = centered_axis(
+        work_area.position.x,
+        work_area.size.width,
+        window_size.width,
+    );
+    let y = centered_axis(
+        work_area.position.y,
+        work_area.size.height,
+        window_size.height,
+    );
+    window.set_position(PhysicalPosition::new(x, y))?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
 fn move_to_cursor_monitor(window: &WebviewWindow) -> tauri::Result<()> {
     let cursor = window.cursor_position()?;
     let monitor = window
@@ -120,9 +146,11 @@ fn move_to_cursor_monitor(window: &WebviewWindow) -> tauri::Result<()> {
         );
         window.set_position(PhysicalPosition::new(x, y))?;
     }
+
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn point_is_inside_monitor(x: f64, y: f64, monitor: &tauri::Monitor) -> bool {
     let position = monitor.position();
     let size = monitor.size();
@@ -136,6 +164,7 @@ fn point_is_inside_monitor(x: f64, y: f64, monitor: &tauri::Monitor) -> bool {
     )
 }
 
+#[cfg(not(target_os = "macos"))]
 fn point_is_inside_rect(
     x: f64,
     y: f64,
@@ -154,7 +183,7 @@ fn centered_axis(origin: i32, available: u32, window: u32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{centered_axis, point_is_inside_rect};
+    use super::centered_axis;
 
     #[test]
     fn centers_window_in_monitor_work_area() {
@@ -171,12 +200,13 @@ mod tests {
         assert_eq!(centered_axis(100, 800, 1000), 100);
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn matches_cursor_inside_negative_coordinate_monitor() {
-        assert!(point_is_inside_rect(
+        assert!(super::point_is_inside_rect(
             -960.0, 348.0, -1920.0, -192.0, 1920.0, 1080.0
         ));
-        assert!(!point_is_inside_rect(
+        assert!(!super::point_is_inside_rect(
             0.0, 348.0, -1920.0, -192.0, 1920.0, 1080.0
         ));
     }

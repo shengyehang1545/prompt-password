@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the quick-search panel appear and focus on the pointer's display, remain visible after outside clicks, toggle with the global shortcut, close explicitly, and reset search-only state while preserving entry-form drafts.
+**Goal:** Make the quick-search panel appear and focus on the primary display, remain visible after outside clicks, toggle with the global shortcut, close explicitly, and reset search-only state while preserving entry-form drafts.
 
-**Architecture:** Rust owns the cross-platform window lifecycle and emits `panel-shown`/`panel-hidden` events. Monitor selection and centering use Tauri APIs on macOS and Windows; only macOS enables the native all-Spaces collection behavior. Preact consumes lifecycle events to reset transient search state and issue an explicit focus request.
+**Architecture:** Rust owns the cross-platform window lifecycle and emits `panel-shown`/`panel-hidden` events. macOS selects and centers on the primary monitor, while Windows retains pointer-monitor placement; only macOS enables the native all-Spaces collection behavior. Preact consumes lifecycle events to reset transient search state and issue an explicit focus request.
 
 **Tech Stack:** Tauri 2, Rust, Preact, TypeScript, CSS, SQLite (unchanged)
 
@@ -63,9 +63,9 @@ Implement `centered_axis(origin, available, window)` with saturating integer con
 pub const PANEL_SHOWN_EVENT: &str = "panel-shown";
 pub const PANEL_HIDDEN_EVENT: &str = "panel-hidden";
 
-fn move_to_cursor_monitor(window: &WebviewWindow) -> tauri::Result<()> {
-    let cursor = window.cursor_position()?;
-    if let Some(monitor) = window.monitor_from_point(cursor.x, cursor.y)? {
+#[cfg(target_os = "macos")]
+fn move_to_primary_monitor(window: &WebviewWindow) -> tauri::Result<()> {
+    if let Some(monitor) = window.primary_monitor()? {
         let area = monitor.work_area();
         let size = window.outer_size()?;
         let x = centered_axis(area.position.x, area.size.width, size.width);
@@ -74,7 +74,10 @@ fn move_to_cursor_monitor(window: &WebviewWindow) -> tauri::Result<()> {
     }
     Ok(())
 }
+
 ```
+
+Keep the existing pointer-monitor helper for Windows under `#[cfg(not(target_os = "macos"))]`.
 
 Configure `set_visible_on_all_workspaces(true)` only under `#[cfg(target_os = "macos")]`. Remove the `Focused(false)` hide listener. Make show best-effort move, then show, focus, and emit `panel-shown`. Make hide emit `panel-hidden`, then hide. Route shortcut toggle and tray show through those functions.
 
@@ -182,7 +185,7 @@ Add a search-bar button after Settings with `aria-label="Hide window"`, `title="
 
 - [ ] **Step 2: Update user-facing behavior docs**
 
-Document that the shortcut toggles the panel on the pointer display, outside clicks no longer hide it, Escape/X hide it, searches reset, and add/edit drafts persist.
+Document that the shortcut toggles the panel on the primary display, outside clicks no longer hide it, Escape/X hide it, searches reset, and add/edit drafts persist.
 
 - [ ] **Step 3: Run all automated checks**
 
