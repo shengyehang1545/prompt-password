@@ -96,7 +96,7 @@ Expected: frontend build succeeds, all Rust tests pass, and Clippy emits no warn
 - Modify: `src-tauri/Cargo.lock`
 - Modify: `src-tauri/tauri.conf.json`
 
-- [ ] **Step 1: Bump version to 0.1.2**
+- [ ] **Step 1: Bump version to 0.1.7**
 
 Update only the project package version fields and the `prompt-password` package entry in Cargo.lock. Keep identifier `com.shengye.prompt-password` unchanged.
 
@@ -104,11 +104,11 @@ Update only the project package version fields and the `prompt-password` package
 
 Run: `npm run tauri build -- --bundles app`
 
-Expected: `src-tauri/target/release/bundle/macos/prompt-password.app` exists and reports version `0.1.2`.
+Expected: `src-tauri/target/release/bundle/macos/prompt-password.app` exists and reports version `0.1.7`.
 
 - [ ] **Step 3: Replace the installed bundle**
 
-Quit `/Applications/prompt-password.app`, move it to the macOS Trash as a recoverable replacement backup only if needed, copy the 0.1.2 bundle into `/Applications`, and launch it. Do not alter `/Users/shengye/Library/Application Support/com.shengye.prompt-password/`.
+Quit `/Applications/prompt-password.app`, move it to the macOS Trash as a recoverable replacement backup only if needed, copy the 0.1.7 bundle into `/Applications`, and launch it. Do not alter `/Users/shengye/Library/Application Support/com.shengye.prompt-password/`.
 
 - [ ] **Step 4: Verify**
 

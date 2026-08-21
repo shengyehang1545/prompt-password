@@ -13,7 +13,7 @@ The current panel only uses `CanJoinAllSpaces`. That makes it visible on ordinar
 On macOS, configure the native `NSWindow` collection behavior on the main thread:
 
 - remove `CanJoinAllSpaces`;
-- add `MoveToActiveSpace`, which moves the window to the active Space when it becomes active;
+- add `MoveToActiveSpace`, which moves the panel to the active Space when it becomes active;
 - add `FullScreenAuxiliary`, which allows the panel to display alongside the full-screen window;
 - set `hidesOnDeactivate(false)` so clicking another application does not hide the panel.
 
@@ -27,4 +27,4 @@ The panel will overlay the full-screen application while open, which is intentio
 
 ## Verification
 
-Automated checks cover Rust compilation, all existing unit tests, Clippy, and native behavior flag composition. Manual macOS checks cover a normal desktop, a full-screen app, immediate typing after shortcut, Escape/close/hotkey hide, and multi-monitor placement. The installed bundle version will be bumped from 0.1.1 to 0.1.2 while retaining the same bundle identifier and application data path.
+Automated checks cover Rust compilation, all existing unit tests, Clippy, and native behavior flag composition. Manual macOS checks cover a normal desktop, a full-screen app, immediate typing after shortcut, Escape/close/hotkey hide, and multi-monitor placement. The installed bundle version will be bumped from 0.1.2 to 0.1.7 while retaining the same bundle identifier and application data path.

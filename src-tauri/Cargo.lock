@@ -2659,7 +2659,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-password"
-version = "0.1.2"
+version = "0.1.7"
 dependencies = [
  "aes-gcm",
  "argon2",
