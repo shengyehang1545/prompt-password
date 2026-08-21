@@ -4,7 +4,7 @@
 
 **Goal:** Make the quick-search panel appear and focus on the primary display, remain visible after outside clicks, toggle with the global shortcut, close explicitly, and reset search-only state while preserving entry-form drafts.
 
-**Architecture:** Rust owns the cross-platform window lifecycle and emits `panel-shown`/`panel-hidden` events. Primary-monitor selection and centering use Tauri APIs on macOS and Windows; only macOS enables the native all-Spaces collection behavior. Preact consumes lifecycle events to reset transient search state and issue an explicit focus request.
+**Architecture:** Rust owns the cross-platform window lifecycle and emits `panel-shown`/`panel-hidden` events. macOS selects and centers on the primary monitor, while Windows retains pointer-monitor placement; only macOS enables the native all-Spaces collection behavior. Preact consumes lifecycle events to reset transient search state and issue an explicit focus request.
 
 **Tech Stack:** Tauri 2, Rust, Preact, TypeScript, CSS, SQLite (unchanged)
 
@@ -63,6 +63,7 @@ Implement `centered_axis(origin, available, window)` with saturating integer con
 pub const PANEL_SHOWN_EVENT: &str = "panel-shown";
 pub const PANEL_HIDDEN_EVENT: &str = "panel-hidden";
 
+#[cfg(target_os = "macos")]
 fn move_to_primary_monitor(window: &WebviewWindow) -> tauri::Result<()> {
     if let Some(monitor) = window.primary_monitor()? {
         let area = monitor.work_area();
@@ -73,7 +74,10 @@ fn move_to_primary_monitor(window: &WebviewWindow) -> tauri::Result<()> {
     }
     Ok(())
 }
+
 ```
+
+Keep the existing pointer-monitor helper for Windows under `#[cfg(not(target_os = "macos"))]`.
 
 Configure `set_visible_on_all_workspaces(true)` only under `#[cfg(target_os = "macos")]`. Remove the `Focused(false)` hide listener. Make show best-effort move, then show, focus, and emit `panel-shown`. Make hide emit `panel-hidden`, then hide. Route shortcut toggle and tray show through those functions.
 

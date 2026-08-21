@@ -10,7 +10,7 @@ Prompt Password is a Tauri 2 desktop password manager with a Preact frontend and
 
 ## Scope
 
-This change targets macOS first, while keeping the display-placement path portable. Windows uses the same primary-monitor lookup to show the panel on the primary display, but skips the macOS-only Space policy. The database schema, encryption format, app identifier, and application data directory remain unchanged.
+This change targets macOS first, while keeping the display-placement path portable. macOS uses the primary-monitor lookup to show the panel on the primary display; Windows retains its existing pointer-monitor placement and skips the macOS-only Space policy. The database schema, encryption format, app identifier, and application data directory remain unchanged.
 
 ## Window Lifecycle
 
