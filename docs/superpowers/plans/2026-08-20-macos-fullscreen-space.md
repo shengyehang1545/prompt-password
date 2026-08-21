@@ -1,115 +1,59 @@
 # macOS Full-Screen Space Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Execute in the current checkout. Do not create a git worktree. Keep the installed app and its data untouched until the final controlled deployment step.
 
-**Goal:** Make the quick panel join the active macOS full-screen Space and receive keyboard input immediately after the global shortcut.
+**Goal:** Validate and, only if safe, integrate a native macOS panel that can appear over a standard full-screen app while preserving the stable Prompt Password behavior.
 
-**Architecture:** Use direct AppKit bindings only on macOS. The existing Tauri monitor placement remains cross-platform; native collection behavior is configured once and native activation runs on the main thread each time the panel is shown.
-
-**Tech Stack:** Tauri 2, Rust, `objc2`, `objc2-app-kit`, AppKit, Preact (unchanged)
+**Baseline:** Commit `5cc9043` / app version `0.1.7` is the known-good production baseline. The previous 0.1.10 experiment is preserved at `/tmp/prompt-password-macos-space-experiment.patch` and must not be deployed.
 
 ---
 
-### Task 1: Add macOS AppKit bindings and behavior helpers
+## Task 1: Restore and verify the stable baseline
 
-**Files:**
-- Modify: `src-tauri/Cargo.toml`
-- Modify: `src-tauri/src/platform/window.rs`
+**Files:** `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `src-tauri/tauri.conf.json`, `src-tauri/src/platform/window.rs`
 
-- [ ] **Step 1: Add target-specific dependencies**
+- [x] Restore source and version fields to the stable 0.1.7 implementation.
+- [x] Record bundle identifier/version and database/WAL metadata without reading secrets.
+- [x] Run `npm run build`, Rust tests, and Clippy against the restored source.
+- [x] Build the 0.1.7 `.app` bundle and verify its bundle metadata.
+- [x] Replace `/Applications/prompt-password.app` once, preserving the app data directory, then confirm the process starts. Do not perform feature testing in this step.
 
-Add macOS-only dependencies so non-macOS builds do not link AppKit:
+## Task 2: Build an isolated AppKit panel probe
 
-```toml
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { version = "0.6", default-features = false }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSWindow"] }
-```
+**Files (local experiment only; not part of the production bundle):**
 
-- [ ] **Step 2: Add a pure behavior composition test**
+- Local source: `/tmp/prompt-password-macos-panel-probe-20260821/`
+- Compiled probe: `/tmp/prompt-password-nspanel-probe`
 
-Add a macOS-gated helper that composes `MoveToActiveSpace` and `FullScreenAuxiliary` while removing `CanJoinAllSpaces`, and test the bit flags:
+- [x] Create a standalone accessory application that constructs a real `NSPanel` at startup.
+- [x] Add a text field and log `isOnActiveSpace`, `isKeyWindow`, `isMainWindow`, active application state, collection behavior, and first-responder status.
+- [x] Support explicit candidate modes: `auxiliary` (`CanJoinAllApplications + FullScreenAuxiliary`), `active-space` (the previous pair plus `MoveToActiveSpace`), and `all-spaces` (control case only).
+- [x] Apply `NonactivatingPanel`, `hidesOnDeactivate = false`, floating behavior, and the chosen level only to the real `NSPanel`.
+- [x] Never call Objective-C `setClass` on a Tauri-created window and never load the Prompt Password database.
+- [x] Compile the probe with `swiftc -framework AppKit`; do not launch it automatically from the main app.
 
-```rust
-#[cfg(target_os = "macos")]
-fn panel_collection_behavior(current: objc2_app_kit::NSWindowCollectionBehavior) -> objc2_app_kit::NSWindowCollectionBehavior {
-    (current & !objc2_app_kit::NSWindowCollectionBehavior::CanJoinAllSpaces)
-        | objc2_app_kit::NSWindowCollectionBehavior::MoveToActiveSpace
-        | objc2_app_kit::NSWindowCollectionBehavior::FullScreenAuxiliary
-}
-```
+## Task 3: One controlled native verification
 
-The test must assert the result contains the two required flags and does not contain `CanJoinAllSpaces`.
+- [x] Run the probe manually once per candidate only when the user is not doing unrelated work.
+- [x] Capture the initial probe logs. All three modes became visible and key. The first `first_responder_is_input=false` reading was a probe bug: `NSTextField` editing uses a field-editor `NSTextView`, and `makeFirstResponder` returned `true`.
+- [x] Check the normal desktop for all three candidates; each reported `make_first_responder_result=true` and `first_responder_is_field_editor=true`.
+- [x] Check a standard Chrome full-screen Space without sending full-screen toggle shortcuts; the safe TaoWindow candidate remained on the triggering desktop instead of appearing in the browser's full-screen Space.
+- [x] Record the result: the candidate did not satisfy the Space requirement, so no production integration was kept.
+- [x] Stop the candidate and restore the stable Prompt Password bundle; the browser was not toggled or otherwise changed by the test.
 
-- [ ] **Step 3: Implement main-thread native configuration**
+## Task 4: Integrate only a passing candidate
 
-In `configure_main_window`, replace the current `set_visible_on_all_workspaces(true)` call with a macOS-only `run_on_main_thread` closure. Obtain `window.ns_window()`, cast it to `&NSWindow`, set the composed behavior, and call `setHidesOnDeactivate(false)`. Ignore failures so window startup remains best-effort.
+- [x] Test a safe `TaoWindow` candidate using `CanJoinAllApplications + FullScreenAuxiliary` and compatible `NSWindow` operations. It failed to join the browser's full-screen Space.
+- [x] Preserve the existing cross-platform monitor placement, `panel-shown`/`panel-hidden` lifecycle, search reset, draft preservation, and Windows path by restoring the stable implementation.
+- [x] Keep all macOS-only code behind `cfg(target_os = "macos")`; no production-only behavior flags or diagnostics remain.
+- [x] Do not use runtime class mutation or unbounded diagnostic logging in production.
+- [x] Stop integration and document that cross-Space behavior requires an upstream tao/Tauri creation-time extension or a separately hosted native panel.
 
-- [ ] **Step 4: Run focused checks**
+## Task 5: Final validation and deployment
 
-Run: `cargo test --manifest-path src-tauri/Cargo.toml platform::window::tests -- --nocapture`
-
-Expected: all window behavior tests pass.
-
-Run: `cargo check --manifest-path src-tauri/Cargo.toml`
-
-Expected: macOS compilation succeeds.
-
-### Task 2: Activate the window in the current full-screen Space
-
-**Files:**
-- Modify: `src-tauri/src/platform/window.rs`
-
-- [ ] **Step 1: Add a macOS activation helper**
-
-Add a macOS-only helper that schedules this closure on the window's main thread:
-
-```rust
-let native_window = window.clone();
-let _ = window.run_on_main_thread(move || {
-    let Ok(pointer) = native_window.ns_window() else { return };
-    let ns_window: &objc2_app_kit::NSWindow = unsafe { &*pointer.cast() };
-    let marker = objc2::MainThreadMarker::new().expect("window activation runs on main thread");
-    let app = objc2_app_kit::NSApplication::sharedApplication(marker);
-    app.activateIgnoringOtherApps(true);
-    ns_window.makeKeyAndOrderFront(None);
-    ns_window.orderFrontRegardless();
-});
-```
-
-- [ ] **Step 2: Call activation after show/focus**
-
-In `show_window`, keep monitor placement, `show`, and Tauri `set_focus`, then call the macOS activation helper before emitting `panel-shown`. Other platforms compile to no-op.
-
-- [ ] **Step 3: Build the frontend and Rust tests**
-
-Run: `npm run build && cargo test --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
-
-Expected: frontend build succeeds, all Rust tests pass, and Clippy emits no warnings.
-
-### Task 3: Bump, package, and deploy safely
-
-**Files:**
-- Modify: `package.json`
-- Modify: `package-lock.json`
-- Modify: `src-tauri/Cargo.toml`
-- Modify: `src-tauri/Cargo.lock`
-- Modify: `src-tauri/tauri.conf.json`
-
-- [ ] **Step 1: Bump version to 0.1.7**
-
-Update only the project package version fields and the `prompt-password` package entry in Cargo.lock. Keep identifier `com.shengye.prompt-password` unchanged.
-
-- [ ] **Step 2: Build the macOS app**
-
-Run: `npm run tauri build -- --bundles app`
-
-Expected: `src-tauri/target/release/bundle/macos/prompt-password.app` exists and reports version `0.1.7`.
-
-- [ ] **Step 3: Replace the installed bundle**
-
-Quit `/Applications/prompt-password.app`, move it to the macOS Trash as a recoverable replacement backup only if needed, copy the 0.1.7 bundle into `/Applications`, and launch it. Do not alter `/Users/shengye/Library/Application Support/com.shengye.prompt-password/`.
-
-- [ ] **Step 4: Verify**
-
-Confirm bundle identifier/version, running process, unchanged database and WAL checksums, shortcut display on a normal desktop and a full-screen app, immediate typing focus, and normal hide controls.
+- [x] Run `npm run build`.
+- [x] Run `cargo test --manifest-path src-tauri/Cargo.toml`.
+- [x] Run `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`.
+- [x] Build release `.app` bundles and verify identifier/version `com.shengye.prompt-password` / `0.1.7`.
+- [x] Record database/WAL/SHM checksums before and after the controlled replacement; all three remained unchanged.
+- [x] Restore `/Applications/prompt-password.app` to the stable 0.1.7 bundle and confirm the process starts.
