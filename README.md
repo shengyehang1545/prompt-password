@@ -78,7 +78,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ### 唤起和搜索
 
-- macOS 默认按 `Cmd+Shift+K` 唤起或隐藏搜索面板。面板会出现在鼠标所在显示器，并可在当前 Space 直接使用。
+- macOS 默认按 `Cmd+Shift+K` 唤起或隐藏搜索面板。面板始终居中显示在主显示器，并可在当前 Space 直接使用。
 - 输入关键词搜索条目。
 - 点击条目复制密码。
 - 可以用方向键选择条目，再按 `Enter` 复制。

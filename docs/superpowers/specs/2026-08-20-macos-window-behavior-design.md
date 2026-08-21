@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make Prompt Password behave like a reliable macOS quick-search panel: the global shortcut shows it on the display under the pointer, activates it across Spaces, focuses the search field, and the same shortcut or an explicit close control hides it. Ordinary searches reset after hiding, while unfinished add/edit forms remain intact.
+Make Prompt Password behave like a reliable macOS quick-search panel: the global shortcut shows it centered on the primary display, activates it across Spaces, focuses the search field, and the same shortcut or an explicit close control hides it. Ordinary searches reset after hiding, while unfinished add/edit forms remain intact.
 
 ## Current Application
 
@@ -10,21 +10,21 @@ Prompt Password is a Tauri 2 desktop password manager with a Preact frontend and
 
 ## Scope
 
-This change targets macOS first, while keeping the display-placement path portable. Windows uses the same cursor and monitor lookup to show the panel on the current pointer display, but skips the macOS-only Space policy. The database schema, encryption format, app identifier, and application data directory remain unchanged.
+This change targets macOS first, while keeping the display-placement path portable. Windows uses the same primary-monitor lookup to show the panel on the primary display, but skips the macOS-only Space policy. The database schema, encryption format, app identifier, and application data directory remain unchanged.
 
 ## Window Lifecycle
 
 The Rust window module owns show/hide behavior. Showing the panel performs these actions in order:
 
-1. Resolve the current mouse position and select the monitor containing it.
-2. Center the panel inside that monitor's available work area.
+1. Resolve the operating system's primary monitor.
+2. Center the panel inside the primary monitor's available work area.
 3. On macOS, make the panel available on the active Space and activate/focus the application window. On Windows, keep the normal workspace behavior.
 4. Show and focus the WebView window.
 5. Emit a frontend event indicating that the panel has been shown.
 
 The global shortcut remains a toggle. If the panel is visible it hides; if hidden it follows the show sequence above. Losing focus no longer hides the panel. The tray Show action uses the same show sequence. Escape and the new visible close button hide the panel without terminating the resident application.
 
-For macOS Spaces, the panel will use the native window collection behavior that allows it to appear on the currently active Space. This avoids private Mission Control APIs and preserves compatibility with normal macOS security restrictions. The panel is moved to the display under the pointer before it is ordered front and focused.
+For macOS Spaces, the panel will use the native window collection behavior that allows it to appear on the currently active Space. This avoids private Mission Control APIs and preserves compatibility with normal macOS security restrictions. The panel is moved to the primary display before it is ordered front and focused.
 
 ## Frontend State and Focus
 
@@ -39,7 +39,7 @@ Hiding from Escape, the explicit close button, or the shortcut follows the same 
 
 ## Components and Boundaries
 
-- `src-tauri/src/platform/window.rs`: cross-platform monitor selection and window placement, macOS workspace policy, show/hide toggle, and panel-shown event emission.
+- `src-tauri/src/platform/window.rs`: cross-platform primary-monitor selection and window placement, macOS workspace policy, show/hide toggle, and panel-shown event emission.
 - `src/App.tsx`: application-level visibility lifecycle, search reset rules, and explicit close action.
 - `src/components/SearchInput.tsx`: stable input ref behavior and reaction to a focus request signal.
 - `src/components/SearchInput.css`: close-button styling consistent with existing search actions.
@@ -49,7 +49,7 @@ No persistence code changes are required.
 
 ## Error Handling
 
-Monitor lookup and placement are best-effort. If the cursor position or monitor cannot be resolved, the existing window position is retained and the panel is still shown. Failure to apply a macOS collection behavior must not prevent showing or focusing the panel. Window show/focus failures remain non-fatal because the shortcut callback cannot return errors to the user.
+Monitor lookup and placement are best-effort. If the primary monitor cannot be resolved, the existing window position is retained and the panel is still shown. Failure to apply a macOS collection behavior must not prevent showing or focusing the panel. Window show/focus failures remain non-fatal because the shortcut callback cannot return errors to the user.
 
 ## Verification
 
@@ -57,7 +57,7 @@ Automated verification covers pure monitor-position calculation and frontend bui
 
 Manual macOS verification covers:
 
-1. Shortcut from each connected display places the panel on the display under the pointer.
+1. Shortcut from each connected display places the panel on the primary display.
 2. Shortcut from another Space brings the panel to that active Space without manually switching desktops.
 3. Search input accepts typing immediately after every show.
 4. Clicking another application leaves the panel visible.

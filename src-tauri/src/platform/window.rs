@@ -37,7 +37,7 @@ pub fn hide_main_window(app: &tauri::AppHandle) {
 }
 
 fn show_window(window: &WebviewWindow) {
-    let _ = move_to_cursor_monitor(window);
+    let _ = move_to_primary_monitor(window);
     let _ = window.show();
     let _ = window.set_focus();
     #[cfg(target_os = "macos")]
@@ -98,53 +98,25 @@ fn hide_window(window: &WebviewWindow) {
     let _ = window.hide();
 }
 
-fn move_to_cursor_monitor(window: &WebviewWindow) -> tauri::Result<()> {
-    let cursor = window.cursor_position()?;
-    let monitor = window
-        .available_monitors()?
-        .into_iter()
-        .find(|monitor| point_is_inside_monitor(cursor.x, cursor.y, monitor));
+fn move_to_primary_monitor(window: &WebviewWindow) -> tauri::Result<()> {
+    let Some(monitor) = window.primary_monitor()? else {
+        return Ok(());
+    };
 
-    if let Some(monitor) = monitor {
-        let work_area = monitor.work_area();
-        let window_size = window.outer_size()?;
-        let x = centered_axis(
-            work_area.position.x,
-            work_area.size.width,
-            window_size.width,
-        );
-        let y = centered_axis(
-            work_area.position.y,
-            work_area.size.height,
-            window_size.height,
-        );
-        window.set_position(PhysicalPosition::new(x, y))?;
-    }
+    let work_area = monitor.work_area();
+    let window_size = window.outer_size()?;
+    let x = centered_axis(
+        work_area.position.x,
+        work_area.size.width,
+        window_size.width,
+    );
+    let y = centered_axis(
+        work_area.position.y,
+        work_area.size.height,
+        window_size.height,
+    );
+    window.set_position(PhysicalPosition::new(x, y))?;
     Ok(())
-}
-
-fn point_is_inside_monitor(x: f64, y: f64, monitor: &tauri::Monitor) -> bool {
-    let position = monitor.position();
-    let size = monitor.size();
-    point_is_inside_rect(
-        x,
-        y,
-        position.x as f64,
-        position.y as f64,
-        size.width as f64,
-        size.height as f64,
-    )
-}
-
-fn point_is_inside_rect(
-    x: f64,
-    y: f64,
-    origin_x: f64,
-    origin_y: f64,
-    width: f64,
-    height: f64,
-) -> bool {
-    x >= origin_x && x < origin_x + width && y >= origin_y && y < origin_y + height
 }
 
 fn centered_axis(origin: i32, available: u32, window: u32) -> i32 {
@@ -154,7 +126,7 @@ fn centered_axis(origin: i32, available: u32, window: u32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{centered_axis, point_is_inside_rect};
+    use super::centered_axis;
 
     #[test]
     fn centers_window_in_monitor_work_area() {
@@ -169,16 +141,6 @@ mod tests {
     #[test]
     fn clamps_oversized_window_to_work_area_origin() {
         assert_eq!(centered_axis(100, 800, 1000), 100);
-    }
-
-    #[test]
-    fn matches_cursor_inside_negative_coordinate_monitor() {
-        assert!(point_is_inside_rect(
-            -960.0, 348.0, -1920.0, -192.0, 1920.0, 1080.0
-        ));
-        assert!(!point_is_inside_rect(
-            0.0, 348.0, -1920.0, -192.0, 1920.0, 1080.0
-        ));
     }
 
     #[cfg(target_os = "macos")]
