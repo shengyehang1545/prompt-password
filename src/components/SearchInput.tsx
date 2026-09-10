@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { inputGuards } from "../lib/inputGuards";
 
 interface SearchInputProps {
@@ -15,11 +16,32 @@ export function SearchInput({ value, onInput, onKeyDown, loading, focusRequest, 
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    let frame = 0;
+    let disposed = false;
+    let focusEventHandled = false;
+    const focusSearch = () => {
+      if (disposed) return;
       inputRef.current?.focus();
       inputRef.current?.select();
+    };
+
+    // The native window may become key after panel-shown is emitted when the
+    // shortcut was pressed from another app's secure password field. Keep a
+    // one-shot listener for this request so focus is retried at that point,
+    // without stealing focus during ordinary window activation.
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (!focused || focusEventHandled) return;
+      focusEventHandled = true;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(focusSearch);
     });
-    return () => cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(focusSearch);
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(frame);
+      unlisten.then((stopListening) => stopListening());
+    };
   }, [focusRequest]);
 
   return (
