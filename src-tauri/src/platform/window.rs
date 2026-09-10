@@ -82,6 +82,10 @@ fn activate_macos_window(window: &WebviewWindow) {
         #[allow(deprecated)]
         app.activateIgnoringOtherApps(true);
         ns_window.makeKeyAndOrderFront(None);
+        // Re-apply focus after native activation so the webview can accept
+        // the frontend focus request when the shortcut came from a secure
+        // password field in another application.
+        let _ = native_window.set_focus();
         ns_window.orderFrontRegardless();
         let _ = native_window.emit(PANEL_SHOWN_EVENT, ());
     });
